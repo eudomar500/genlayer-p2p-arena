@@ -6,10 +6,10 @@ Intelligent Contracts for `genlayer-p2p-arena`, written in Python for the GenVM.
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `Trade.py` | ✅ v1 complete | Per-trade escrow contract. Holds GEN, manages state machine, invokes LLM on dispute. |
-| `MarketplaceFactory.py` | 🚧 in progress | Singleton factory. Deploys `Trade` instances, validates callbacks, tracks aggregate metrics. |
-| `PredictionMarketFactory.py` | 📋 planned | Singleton factory for daily prediction market windows. |
-| `PredictionMarket.py` | 📋 planned | Per-window binary prediction market. Settles by reading `MarketplaceFactory` state. |
+| `Trade.py` | v1 complete | Per-trade escrow contract. Holds GEN, manages state machine, invokes LLM on dispute. |
+| `MarketplaceFactory.py` | in progress | Singleton factory. Deploys `Trade` instances, validates callbacks, tracks aggregate metrics. |
+| `PredictionMarketFactory.py` |  planned | Singleton factory for daily prediction market windows. |
+| `PredictionMarket.py` |  planned | Per-window binary prediction market. Settles by reading `MarketplaceFactory` state. |
 
 ## Conventions used in these contracts
 
