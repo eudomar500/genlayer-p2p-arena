@@ -46,6 +46,7 @@ class TradeData:
     seller_bond: u256
     llm_verdict_buyer_wins: bool
     llm_verdict_reasoning: str
+    was_disputed: bool
 
 
 class Contract(gl.Contract):
@@ -106,6 +107,7 @@ class Contract(gl.Contract):
             seller_bond=u256(0),
             llm_verdict_buyer_wins=False,
             llm_verdict_reasoning="",
+            was_disputed=False,
         )
         self.next_trade_id += u256(1)
         self._update_first_seen(seller, now)
@@ -201,6 +203,7 @@ class Contract(gl.Contract):
         trade.dispute_initiator = sender
         trade.disputed_at = now
         trade.state = STATE_DISPUTED
+        trade.was_disputed = True
 
     @gl.public.write.payable
     def respond_to_dispute(self, trade_id: u256, evidence: str) -> None:
@@ -378,18 +381,13 @@ Respond with a JSON object with exactly these keys:
     @gl.public.view
     def get_trade_summary(self, trade_id: u256) -> dict:
         trade = self.trades[trade_id]
-        is_disputed_state = (
-            trade.state == STATE_DISPUTED
-            or trade.state == STATE_RESOLVED_BUYER
-            or trade.state == STATE_RESOLVED_SELLER
-        )
         return {
             "seller": str(trade.seller),
             "buyer": str(trade.buyer),
             "price": str(trade.price),
             "state": int(trade.state),
             "shipped_at": int(trade.shipped_at),
-            "disputed": is_disputed_state,
+            "disputed": bool(trade.was_disputed),
             "llm_verdict_buyer_wins": bool(trade.llm_verdict_buyer_wins),
             "llm_verdict_reasoning": str(trade.llm_verdict_reasoning),
         }
@@ -425,7 +423,7 @@ Respond with a JSON object with exactly these keys:
             trade_id += u256(1)
             if trade.state != STATE_COMPLETED:
                 continue
-            if trade.llm_verdict_buyer_wins:
+            if trade.was_disputed:
                 continue
             if trade.delivered_at < window_start or trade.delivered_at > window_end:
                 continue
