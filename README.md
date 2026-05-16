@@ -6,7 +6,7 @@ A trust-minimized P2P marketplace with an integrated meta-prediction market, bui
 
 ---
 
-## What this is
+## What this is?
 
 Two products that share one substrate:
 
@@ -18,7 +18,7 @@ The two products compound: the marketplace generates the verifiable data stream 
 
 ---
 
-## Why GenLayer
+## Why GenLayer?
 
 This design is intractable on EVM and tractable on GenLayer for one specific reason: **dispute resolution requires subjective judgment** ("did the item match the description?", "is this evidence credible?"). Solidity can't make that call without an external oracle or human arbiter, and both centralize the trust model.
 
