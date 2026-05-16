@@ -1,0 +1,16 @@
+# Core GenLayer Python SDK and test framework
+genlayer-py>=0.1.0
+genlayer-test>=0.1.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+click>=8.1.0
+rich>=13.0.0
+
+# Code quality (optional, used by `task format`)
+black>=24.0.0

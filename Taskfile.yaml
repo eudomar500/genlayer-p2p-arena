@@ -1,0 +1,192 @@
+version: '3'
+
+# Orchestrator for genlayer-p2p-arena
+# Install Task: https://taskfile.dev/installation/
+# Run `task --list` to see available commands.
+
+vars:
+  CONTRACTS_DIR: ./contracts
+  TESTS_DIR: ./tests
+  SCRIPTS_DIR: ./scripts
+  FRONTEND_DIR: ./frontend
+  PYTHON: python3
+  PIP: pip3
+
+tasks:
+
+  # ─── Setup ────────────────────────────────────────────────────────────
+
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Install all dependencies (Python + Node + GenLayer CLI)
+    cmds:
+      - task: setup:python
+      - task: setup:node
+      - task: setup:genlayer
+      - echo "Setup complete. Run 'task studio:up' next."
+
+  setup:python:
+    desc: Install Python dependencies for scripts and tests
+    cmds:
+      - "{{.PIP}} install --upgrade pip"
+      - "{{.PIP}} install -r requirements.txt"
+
+  setup:node:
+    desc: Install frontend Node dependencies
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - pnpm install
+    preconditions:
+      - sh: command -v pnpm
+        msg: "pnpm is required. Install with: npm install -g pnpm"
+
+  setup:genlayer:
+    desc: Install GenLayer CLI globally
+    cmds:
+      - npm install -g genlayer
+    preconditions:
+      - sh: command -v node
+        msg: "Node.js is required."
+
+  # ─── GenLayer Studio (local network) ──────────────────────────────────
+
+  studio:up:
+    desc: Start local GenLayer Studio (localnet)
+    cmds:
+      - genlayer up
+
+  studio:down:
+    desc: Stop local GenLayer Studio
+    cmds:
+      - genlayer stop
+
+  studio:reset:
+    desc: Wipe and restart Studio with fresh state
+    cmds:
+      - genlayer stop || true
+      - rm -rf .genlayer studio-data
+      - genlayer up
+
+  # ─── Linting ──────────────────────────────────────────────────────────
+
+  lint:
+    desc: Run GenVM linter on all contracts
+    cmds:
+      - for f in {{.CONTRACTS_DIR}}/*.py; do echo "Linting $f..."; genlayer lint "$f" || exit 1; done
+
+  lint:fix:
+    desc: Run linter with auto-fix where possible
+    cmds:
+      - for f in {{.CONTRACTS_DIR}}/*.py; do genlayer lint "$f" --fix; done
+
+  # ─── Testing ──────────────────────────────────────────────────────────
+
+  test:
+    desc: Run all tests (direct mode, fast)
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}} -v"
+
+  test:security:
+    desc: Run security-focused test suite
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}} -v -k 'test_trade_state_machine or test_trade_access_control or test_trade_reentrancy or test_trade_prompt_injection or test_trade_overflow or test_factory_callback_auth or test_prediction_wash_economics or test_prediction_settlement_timing'"
+
+  test:integration:
+    desc: Run integration tests against running Studio (slower, requires studio:up)
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}}/integration -v"
+
+  test:trade:
+    desc: Run only Trade contract tests
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}} -v -k trade"
+
+  test:factory:
+    desc: Run only Factory contract tests
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}} -v -k factory"
+
+  test:prediction:
+    desc: Run only PredictionMarket tests
+    cmds:
+      - "{{.PYTHON}} -m pytest {{.TESTS_DIR}} -v -k prediction"
+
+  # ─── Deployment ───────────────────────────────────────────────────────
+
+  deploy:local:
+    desc: Deploy factories to local Studio
+    cmds:
+      - "{{.PYTHON}} {{.SCRIPTS_DIR}}/deploy_factories.py --network localnet"
+
+  deploy:testnet:
+    desc: Deploy factories to GenLayer testnet Asimov
+    cmds:
+      - "{{.PYTHON}} {{.SCRIPTS_DIR}}/deploy_factories.py --network testnet-asimov"
+    preconditions:
+      - sh: test -n "$GENLAYER_PRIVATE_KEY"
+        msg: "GENLAYER_PRIVATE_KEY env var required for testnet deploy"
+
+  # ─── Demo scripts ─────────────────────────────────────────────────────
+
+  demo:happy-path:
+    desc: End-to-end demo of a successful trade (no dispute)
+    cmds:
+      - "{{.PYTHON}} {{.SCRIPTS_DIR}}/demo_happy_path.py"
+
+  demo:dispute:
+    desc: End-to-end demo of a disputed trade (invokes LLM)
+    cmds:
+      - "{{.PYTHON}} {{.SCRIPTS_DIR}}/demo_dispute.py"
+
+  demo:prediction:
+    desc: End-to-end demo of a prediction market opening and settling
+    cmds:
+      - "{{.PYTHON}} {{.SCRIPTS_DIR}}/demo_prediction.py"
+
+  # ─── Frontend ─────────────────────────────────────────────────────────
+
+  frontend:dev:
+    desc: Run frontend dev server
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - pnpm dev
+
+  frontend:build:
+    desc: Build frontend for production
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - pnpm build
+
+  # ─── CI / Quality ─────────────────────────────────────────────────────
+
+  ci:
+    desc: Run full CI suite (lint + tests)
+    cmds:
+      - task: lint
+      - task: test
+      - task: test:security
+
+  format:
+    desc: Format Python code with black
+    cmds:
+      - "{{.PYTHON}} -m black {{.CONTRACTS_DIR}} {{.TESTS_DIR}} {{.SCRIPTS_DIR}}"
+
+  # ─── Cleanup ──────────────────────────────────────────────────────────
+
+  clean:
+    desc: Remove build artifacts and caches
+    cmds:
+      - rm -rf .pytest_cache __pycache__ .coverage htmlcov
+      - find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      - find . -type f -name '*.pyc' -delete
+
+  clean:all:
+    desc: Remove EVERYTHING regeneratable (caches, node_modules, studio state)
+    cmds:
+      - task: clean
+      - rm -rf {{.FRONTEND_DIR}}/node_modules {{.FRONTEND_DIR}}/.next
+      - rm -rf .genlayer studio-data
