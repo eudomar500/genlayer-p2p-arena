@@ -8,59 +8,78 @@ Three constraints shaped every decision:
 
 1. **The happy path must not invoke the LLM.** Validator inference is the most expensive operation in GenLayer. If a typical trade triggered LLM calls, the unit economics would not work for the LATAM/Venezuela P2P segment (low ticket sizes, $20–$100 range). LLM cost is reserved for genuine disputes.
 
-2. **The equivalence principle scope must be narrow.** Validators converge on outcomes more reliably when the reasoning surface per transaction is bounded. We chose 1-contract-per-trade so each LLM adjudication reasons about a single, isolated case — not a `mapping(uint => Trade)` containing hundreds.
+2. **The equivalence principle scope must be narrow per dispute.** Validators converge on outcomes more reliably when the reasoning surface per transaction is bounded. Even though all trades live in a single contract's storage, each dispute's LLM prompt contains *only* that specific trade's data (title, description, evidence, tracking). The prompt is built fresh per dispute and never includes other trades — isolation happens at the prompt level, not the storage level.
 
 3. **Settlement must outlast the appeal window.** GenLayer's Optimistic Democracy finalizes transactions only after an appeal-eligible period. The prediction market settlement is delayed 24h post-market-close so that the trades it measures have all finalized before payouts execute.
 
 ## Contract topology
 
 ```
-                       ┌────────────────────────┐
-                       │  MarketplaceFactory    │
-                       │  (singleton)           │
-                       └────────────────────────┘
-                              │    ▲    ▲
-                deploys ──────┘    │    │ ── records (on='finalized')
-                       │            │    │
-                       ▼            │    │
-              ┌──────────────┐      │    │
-              │   Trade #1   │──────┘    │
-              │   Trade #2   │───────────┘
-              │   Trade #N   │
-              └──────────────┘
-                                   ▲
-                                   │ reads metrics
-                                   │
-                       ┌────────────────────────────┐
-                       │  PredictionMarketFactory   │
-                       │  (singleton)               │
-                       └────────────────────────────┘
-                              │
-                deploys ──────┘
-                       │
-                       ▼
-              ┌──────────────────────┐
-              │  PredictionMarket    │
-              │  (1 per daily window)│
-              └──────────────────────┘
+                  ┌──────────────────────────────────┐
+                  │  Marketplace (singleton)         │
+                  │                                  │
+                  │  trades: TreeMap[u256, TradeData]│
+                  │  first_seen: TreeMap[Address,u64]│
+                  │  fees_collected: u256            │
+                  │  completed_count: u256           │
+                  │  disputed_count: u256            │
+                  │  total_volume: u256              │
+                  │                                  │
+                  │  + state machine per trade_id    │
+                  │  + LLM dispute per trade         │
+                  │  + native upgradability          │
+                  └──────────────────────────────────┘
+                                  ▲
+                                  │ reads aggregate metrics
+                                  │ via @gl.public.view methods
+                                  │
+                  ┌──────────────────────────────────┐
+                  │  PredictionMarket (singleton)    │
+                  │                                  │
+                  │  markets: TreeMap[u256, Market]  │
+                  │  bets: TreeMap[u256, DynArray]   │
+                  │                                  │
+                  │  + binary markets per window     │
+                  │  + settles via marketplace state │
+                  └──────────────────────────────────┘
 ```
 
-### Why factories instead of singletons
+Two contracts. Both singletons. No factories, no per-trade contracts. Each trade lives as an entry in `Marketplace.trades[trade_id]`.
 
-A common alternative would be a singleton `Marketplace` contract holding `mapping(tradeId => TradeData)`. We rejected this for three reasons specific to GenLayer:
+### Why singleton instead of factories
 
-- **Prompt context isolation.** When the LLM adjudicates a dispute, its prompt contains *only* the relevant trade's data. A singleton design would pollute the prompt with adjacent state or require careful slicing logic — extra surface for bugs.
-- **Independent appeal.** Each trade's dispute can be appealed independently without blocking other trades. In a singleton, an appeal on one trade could lock the contract's state for others.
-- **Storage layout simplicity.** GenLayer's storage system is explicit and per-field. A per-trade contract has a flat storage layout that's trivial to reason about; a singleton would need nested storage with all the bookkeeping that entails.
+The initial design called for one `MarketplaceFactory` that deploys an individual `Trade` contract per trade. This pattern is familiar from Solidity (think Uniswap V2's `Pair` deployed by `Factory`) and would give per-trade prompt isolation at the storage level. After investigating GenLayer's documented capabilities, we changed the design to a singleton holding all trades in `TreeMap[u256, TradeData]`. Three reasons:
 
-The tradeoff is deployment overhead: each new trade pays the gas cost of deploying a new contract. For an MVP this is acceptable; for production v2 we may revisit with a hybrid model.
+- **GenLayer Studio is single-contract focused.** The Studio UI documented workflow is "Load a Contract → Deploy a Contract → Read State → Execute Transaction." A factory-per-trade design would force the demo to orchestrate deployments outside Studio. For a hackathon judged via Studio, this would break the live demo flow.
+
+- **No documented contract-to-contract dynamic deployment in GenLayer's runtime.** The GenLayer documentation describes contract deployment via: (a) CLI (`genlayer deploy --contract ...`), (b) TypeScript deploy scripts using `deployContract(client, ...)`, (c) Python test helpers (`deploy_intelligent_contract(...)`). It does not document `new Contract(args)` semantics from within an Intelligent Contract. Building on an unsupported pattern was a risk we declined to take.
+
+- **TreeMap is the canonical pattern.** GenLayer storage primitives (`TreeMap[K, V]`, `DynArray[T]`, `@allow_storage @dataclass`) are explicitly designed for this layout. The community utility library `genlayer-utils` ships `treemap_paginate()`, `treemap_count()`, and `address_map_to_dict()` — confirmation that "many entries in TreeMap" is the expected pattern.
+
+**What we preserve from the original design:**
+
+- Per-dispute prompt isolation: even though state is shared, each LLM adjudication reasons over one trade's data, never multiple.
+- The 7-day dispute window, 5% bond, 2% fee, and full state machine.
+- The full threat model (T1–T10).
+
+**What we gain:**
+
+- Single Studio deployment for the entire marketplace.
+- Aggregate metrics (`completed_count`, `total_volume`) trivially queryable for the prediction market.
+- Native upgradability via `gl.storage.Root` — admin can patch bugs without losing in-flight trades.
+- Lower gas overhead per trade (no per-trade deployment cost).
+
+**What we accept as trade-off:**
+
+- A critical bug in `Marketplace.py` affects all trades simultaneously. v1 mitigates via the upgradability path and the threat model. v2 will add a multisig over the upgrader role.
+- The TreeMap of trades grows unboundedly. Acceptable in v1 (acceses are O(log n) and storage cost scales linearly per trade). For very large N, pagination patterns from `genlayer-utils` apply.
 
 ## Trade state machine
 
 ```
-   AWAITING_PAYMENT
+   LISTING_OPEN
         │
-        │ buyer deposits (payable)
+        │ buyer accepts + pays (payable)
         ▼
        PAID
         │
@@ -88,7 +107,9 @@ The tradeoff is deployment overhead: each new trade pays the gas cost of deployi
                                       COMPLETED        COMPLETED
 ```
 
-All transitions validate `gl.message.sender_address` against `self.buyer` or `self.seller` and check `self.state` before mutating. Invalid transitions raise `gl.vm.UserError` and revert.
+Additionally, `LISTING_OPEN → CANCELLED` is reachable by the seller before any buyer accepts.
+
+All transitions validate `gl.message.sender_address` against `self.trades[trade_id].seller` or `.buyer` and check `self.trades[trade_id].state` before mutating. Invalid transitions raise `gl.vm.UserError` and revert.
 
 ## Dispute adjudication
 

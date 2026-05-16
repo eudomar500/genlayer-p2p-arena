@@ -6,39 +6,43 @@ Intelligent Contracts for `genlayer-p2p-arena`, written in Python for the GenVM.
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `Trade.py` | ✅ v1 complete | Per-trade escrow contract. Holds GEN, manages state machine, invokes LLM on dispute. |
-| `MarketplaceFactory.py` | 🚧 in progress | Singleton factory. Deploys `Trade` instances, validates callbacks, tracks aggregate metrics. |
-| `PredictionMarketFactory.py` | 📋 planned | Singleton factory for daily prediction market windows. |
-| `PredictionMarket.py` | 📋 planned | Per-window binary prediction market. Settles by reading `MarketplaceFactory` state. |
+| `Marketplace.py` | ✅ v1 complete | Singleton marketplace. Holds all trades in storage, manages state machine per trade, invokes LLM on dispute, aggregates metrics for the prediction market. |
+| `PredictionMarket.py` | 📋 next | Singleton prediction market. Holds binary markets per daily window, settles by reading `Marketplace` metrics. |
 
-## Conventions used in these contracts
+## Architecture rationale
+
+This codebase uses a **singleton + struct-in-storage** design (one `Marketplace` contract holds all trades in a `TreeMap[u256, TradeData]`) instead of the more obvious **factory + per-trade-instance** design.
+
+Why:
+
+- **GenLayer Studio is single-contract focused.** The Studio UI assumes "load one contract, deploy it, interact with it." A factory-per-trade pattern would force reviewers and judges to orchestrate deployment scripts outside Studio, breaking the demo flow.
+- **No documented contract-to-contract dynamic deployment.** The GenLayer documentation describes contract deployment via CLI, deploy scripts (TypeScript), and tests. It does not document `new Contract(...)` semantics from within an Intelligent Contract.
+- **TreeMap is the canonical pattern.** GenLayer's storage primitives (`TreeMap[K, V]`, `DynArray[T]`, `@allow_storage @dataclass`) are explicitly designed for this layout. Community utilities (`genlayer-utils`) include `treemap_paginate()` and `treemap_count()` confirming it as a known pattern.
+
+The full design rationale and trade-off analysis is in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
+## Conventions used
 
 - **English-only.** All identifiers, comments, and prompt text are in English. Reasoning: the LLM models backing GenLayer validators perform best on English prompts, and the codebase needs to be readable by international reviewers.
 - **No decorative comments.** No ASCII art headers, no section dividers, no "FIX-X" markers. Comments only where logic is non-obvious.
-- **Minimal NatSpec.** Method docstrings where professionally standard. No exhaustive parameter documentation that duplicates type hints.
-- **State constants in UPPER_SNAKE.** Constants at module level, not class attributes.
-- **Reverts use `gl.vm.UserError`** with short lowercase messages (`"only buyer can deposit"`, `"insufficient dispute bond"`).
+- **Reverts use `gl.vm.UserError`** with short lowercase messages (`"only buyer can confirm delivery"`, `"insufficient dispute bond"`).
+- **Sized integer types everywhere.** `u256` for monetary amounts, `u64` for timestamps, `u8` for state enums. `int` is forbidden in persistent storage by GenLayer.
 
-## Why one contract per trade
+## Storage rules applied
 
-Each `Trade` is its own deployed instance rather than an entry in a singleton mapping. The full rationale is in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md#why-factories-instead-of-singletons), but the short version:
+GenLayer's storage system has strict rules that this codebase follows:
 
-1. The LLM dispute reasons over **one trade's data**, not a polluted shared context.
-2. Appeals on one trade do not block others.
-3. Storage layout is flat and trivial to audit.
+- All persistent fields are declared in the class body with type annotations.
+- `list[T]` is replaced with `DynArray[T]`. `dict[K, V]` is replaced with `TreeMap[K, V]`.
+- Custom dataclasses used in storage are decorated with `@allow_storage`.
+- Before passing storage objects to non-deterministic blocks (LLM calls), they are copied to memory with `gl.storage.copy_to_memory(...)`.
+- Field mutations like `self.trades[id].field = x` work in-place — they are views into storage, not copies.
 
-The tradeoff is deployment cost per new trade. Acceptable for MVP; revisitable in v2.
+## Upgradability
 
-## Storage layout reminders
+`Marketplace.py` uses GenLayer's native upgradability via `gl.storage.Root`. In v1, the deployer is the sole upgrader. v2 will migrate to a multisig + timelock.
 
-GenLayer storage is **explicit**. Every field must be declared at the class level with a type, initialized in `__init__`, and uses type-specific accessors. Common types in this codebase:
-
-- `Address` — wallet or contract address (20 bytes)
-- `u256` — value amounts in wei (1 GEN = 10¹⁸ wei)
-- `u64` — timestamps and counters
-- `u8` — state enum values
-- `bool` — flags
-- `str` — UTF-8 strings (used for evidence, tracking numbers, etc.)
+To freeze the contract permanently, the admin can call `transfer_admin(zero_address)` and the upgrader address loses all power. This path is documented and reserved for post-audit production deployment.
 
 ## Linting
 
@@ -53,7 +57,7 @@ This runs `genvm-lint` from the official [`genlayer-dev`](https://github.com/gen
 ## Testing
 
 ```bash
-task test:trade          # only Trade tests
+task test:marketplace    # only Marketplace contract tests
 task test:security       # full security suite
 task test                # everything
 ```

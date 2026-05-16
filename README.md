@@ -31,47 +31,41 @@ GenLayer's [Optimistic Democracy](https://docs.genlayer.com/understand-genlayer-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│   ┌───────────────────────┐         ┌────────────────────────┐  │
-│   │  MarketplaceFactory   │◄────────┤  PredictionMarket      │  │
-│   │  - deploys Trades     │  reads  │  Factory               │  │
-│   │  - tracks metrics     │ metrics │  - deploys Markets     │  │
-│   │  - collects fees (2%) │         │    per daily window    │  │
-│   └──────────┬────────────┘         └────────────┬───────────┘  │
-│              │ deploys                            │ deploys     │
-│              ▼                                    ▼             │
-│   ┌────────────────────┐              ┌────────────────────┐    │
-│   │  Trade (1-per-     │              │  PredictionMarket  │    │
-│   │  trade instance)   │              │  (1-per-window)    │    │
-│   │                    │              │                    │    │
-│   │  - escrow GEN      │              │  - binary YES/NO   │    │
-│   │  - state machine   │              │  - settles from    │    │
-│   │  - LLM dispute     │              │    Factory state   │    │
-│   └────────────────────┘              └────────────────────┘    │
+│   ┌───────────────────────────┐    ┌────────────────────────┐   │
+│   │  Marketplace (singleton)  │◄───┤  PredictionMarket      │   │
+│   │                           │    │  (singleton)           │   │
+│   │  - all trades in storage  │    │                        │   │
+│   │  - state machine per id   │    │  - daily binary mkts   │   │
+│   │  - LLM dispute resolution │    │  - reads marketplace   │   │
+│   │  - 2% fee, 5% bond        │    │    metrics for settle  │   │
+│   │  - upgradable (admin)     │    │  - 24h settle window   │   │
+│   └───────────────────────────┘    └────────────────────────┘   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Four contracts, all in Python under `contracts/`. Each `Trade` is its own deployed instance — this isolates the LLM dispute context per trade and keeps the equivalence-principle scope small. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
+**Two contracts.** Both singletons. `Marketplace.py` holds every trade in a `TreeMap[u256, TradeData]` and exposes per-trade methods (`accept_listing(trade_id)`, `mark_shipped(trade_id, ...)`, etc). `PredictionMarket.py` reads `Marketplace` metrics directly for settlement. The singleton design is required for compatibility with GenLayer Studio's single-contract deployment model. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design rationale.
 
 ---
 
 ## Trade lifecycle
 
 ```
-DRAFT → AWAITING_PAYMENT → PAID → SHIPPED → DELIVERED → COMPLETED
-                                     │
-                                     ├─→ (no confirmation in 7d) → seller claims → COMPLETED
-                                     │
-                                     └─→ DISPUTED → both submit evidence
-                                                          │
-                                                          ▼
-                                                    LLM adjudicates
-                                                          │
-                                                  ┌───────┴───────┐
-                                                  ▼               ▼
-                                          RESOLVED_BUYER    RESOLVED_SELLER
-                                          (full refund +    (price - fee +
-                                          bond returned)    bond returned)
+LISTING_OPEN → PAID → SHIPPED → DELIVERED → COMPLETED
+                          │
+                          ├─→ (no confirmation in 7d) → seller claims → COMPLETED
+                          │
+                          └─→ DISPUTED → both submit evidence
+                                                │
+                                                ▼
+                                          LLM adjudicates
+                                                │
+                                        ┌───────┴───────┐
+                                        ▼               ▼
+                                RESOLVED_BUYER    RESOLVED_SELLER
+                                (full refund +    (price - fee +
+                                bond returned)    bond returned)
+                                                  → both end at COMPLETED
 ```
 
 Key design decisions:
@@ -80,6 +74,7 @@ Key design decisions:
 - **Dispute bond = 5% of price**, posted by both sides. Winner recovers it, loser forfeits. This auto-funds the system and filters frivolous disputes.
 - **The LLM verdict ships with reasoning** stored on-chain — disputes are transparent and explainable.
 - **Settlement window of 24h after market close** for the prediction market, to outlast the GenLayer appeal window before paying out.
+- **Native upgradability** via `gl.storage.Root` — admin can deploy fixes without losing in-flight trades. v2 will migrate this to a multisig.
 
 ---
 
