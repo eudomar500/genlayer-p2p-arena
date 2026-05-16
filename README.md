@@ -165,4 +165,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Author
 
-Built by Eudomar Quintero (@xVan_Whitehat) — DeFi security researcher exploring trust-minimized adjudication primitives.
+Built by @zkVan — DeFi security researcher exploring trust-minimized adjudication primitives.
