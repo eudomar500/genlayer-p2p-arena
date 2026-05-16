@@ -1,4 +1,4 @@
-# genlayer-p2p-arena
+# Genlayer-p2p-arena
 
 A trust-minimized P2P marketplace with an integrated meta-prediction market, built on [GenLayer](https://genlayer.com) Intelligent Contracts.
 
