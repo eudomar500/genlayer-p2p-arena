@@ -11,7 +11,7 @@ This document is the threat model and mitigation map for `genlayer-p2p-arena`. I
 | Buyer / Seller | Untrusted, potentially adversarial, may collude with each other |
 | GenLayer validator set | Honest majority, may include compromised individual validators |
 | LLM providers backing validators | May return inconsistent outputs; mitigated by `run_nondet_unsafe` semantic consensus |
-| Marketplace admin (deployer) | **Privileged:** can upgrade contract code and withdraw collected fees. v2 will migrate this role to a multisig + timelock. |
+| Marketplace admin (zkVan, deployer) | **Privileged:** can upgrade contract code and withdraw collected fees. v2 will migrate this role to a multisig + timelock. |
 | Off-chain frontend / RPC node | Untrusted; all state derives from on-chain reads |
 
 **Admin powers in v1:**
