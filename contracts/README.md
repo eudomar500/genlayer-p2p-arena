@@ -6,8 +6,8 @@ Intelligent Contracts for `genlayer-p2p-arena`, written in Python for the GenVM.
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `Marketplace.py` | ✅ v1 complete | Singleton marketplace. Holds all trades in storage, manages state machine per trade, invokes LLM on dispute, aggregates metrics for the prediction market. |
-| `PredictionMarket.py` | 📋 next | Singleton prediction market. Holds binary markets per daily window, settles by reading `Marketplace` metrics. |
+| `Marketplace.py` | v1 complete | Singleton marketplace. Holds all trades in storage, manages state machine per trade, invokes LLM on dispute, aggregates metrics for the prediction market. |
+| `PredictionMarket.py` | next | Singleton prediction market. Holds binary markets per daily window, settles by reading `Marketplace` metrics. |
 
 ## Architecture rationale
 
