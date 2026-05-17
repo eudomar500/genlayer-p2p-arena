@@ -1,4 +1,4 @@
-# Live Demo Results — GenLayer P2P Arena
+# Live Demo Results GenLayer P2P Arena
 
 End-to-end demonstration of the marketplace contract executing both a happy-path trade and an LLM-arbitrated dispute resolution on GenLayer Studionet.
 
