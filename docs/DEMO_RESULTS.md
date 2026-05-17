@@ -25,7 +25,7 @@ Explorer link: https://explorer-studio.genlayer.com/address/0x8491a3b8bE8c37F58C
 | Seller / admin | `0xF27E3A6d7Bf4BfC0A837020FD74E73055aF17D53` |
 | Buyer | `0xFeE34b22628Fa0D5B8fA64Ba7c49835EcB18e752` |
 
-## Trade 0 — Happy path
+## Trade 0 Happy path
 
 Listing created, accepted, shipped, and delivered without dispute. Marketplace fee (2%) settled atomically on delivery confirmation.
 
@@ -57,7 +57,7 @@ All five transactions reached `FINALIZED` status with `SUCCESS` GenVM result and
 - Seller received 0.98 GEN payout in a contract-initiated value transfer
 - Marketplace fee (0.02 GEN) retained inside contract balance for later withdrawal by admin
 
-## Trade 1 — LLM-arbitrated dispute (buyer wins)
+## Trade 1 LLM-arbitrated dispute (buyer wins)
 
 A second trade where the buyer received a physical good and claimed it arrived damaged. The seller responded claiming carrier responsibility. The contract invoked an LLM with 5-validator consensus to resolve the dispute and execute the resulting payout automatically.
 
