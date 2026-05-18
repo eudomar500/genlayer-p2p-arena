@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-CONTRACT_VERSION = u16(141)
+CONTRACT_VERSION = u16(144)
 
 STATE_LISTING_OPEN = u8(0)
 STATE_PAID = u8(1)
@@ -15,7 +15,6 @@ STATE_COMPLETED = u8(4)
 STATE_CANCELLED = u8(5)
 STATE_REFUNDED = u8(6)
 
-# Time windows
 DISPUTE_WINDOW_SECONDS = u64(7 * 24 * 60 * 60)
 DISPUTE_RESPONSE_WINDOW_SECONDS = u64(14 * 24 * 60 * 60)
 ELIGIBILITY_PERIOD_SECONDS = u64(7 * 24 * 60 * 60)
@@ -23,14 +22,13 @@ MAX_SHIPPING_DELAY_SECONDS = u64(30 * 24 * 60 * 60)
 ADMIN_FORCE_REFUND_DELAY_SECONDS = u64(30 * 24 * 60 * 60)
 PUBLIC_FORCE_REFUND_DELAY_SECONDS = u64(90 * 24 * 60 * 60)
 
-# Economic parameters
 MARKETPLACE_FEE_BPS = u256(200)
 DISPUTE_BOND_BPS = u256(500)
+DEFAULT_JUDGMENT_PENALTY_BPS = u256(500)
 BPS_DENOMINATOR = u256(10000)
 MIN_PRICE = u256(10**15)
 MAX_PRICE = u256(10**30)
 
-# Length bounds
 MIN_TITLE_LENGTH = u32(1)
 MAX_TITLE_LENGTH = u32(200)
 MIN_DESCRIPTION_LENGTH = u32(1)
@@ -43,7 +41,6 @@ MIN_EVIDENCE_LENGTH = u32(1)
 MAX_EVIDENCE_LENGTH = u32(4000)
 MAX_REASONING_LENGTH = u32(300)
 
-# View limits
 MAX_ELIGIBLE_TRADES_LOOKBACK = u256(1000)
 
 ZERO_ADDRESS_HEX = "0x0000000000000000000000000000000000000000"
@@ -65,6 +62,7 @@ class TradeData:
     seller_evidence: str
     state: u8
     created_at: u64
+    paid_at: u64
     shipped_at: u64
     delivered_at: u64
     disputed_at: u64
@@ -75,9 +73,6 @@ class TradeData:
     llm_verdict_reasoning: str
     was_disputed: bool
     resolved_by_default: bool
-    # Appended in v141: tracks when the buyer paid for the listing,
-    # used as the reference for MAX_SHIPPING_DELAY_SECONDS timeouts.
-    paid_at: u64
 
 
 class Contract(gl.Contract):
@@ -110,44 +105,40 @@ class Contract(gl.Contract):
         root = gl.storage.Root.get()
         root.upgraders.get().append(gl.message.sender_address)
 
-    # ---------- internal helpers ----------
-
     def _now(self) -> u64:
         return u64(int(datetime.now(timezone.utc).timestamp()))
 
-    def _check_not_paused(self) -> None:
+    def _require_unpaused(self) -> None:
         if self.paused:
-            raise gl.vm.UserError("[EXPECTED] contract is paused")
+            raise gl.vm.UserError("[EXPECTED] paused")
 
-    def _check_admin(self) -> None:
+    def _require_admin(self) -> None:
         if gl.message.sender_address != self.admin:
-            raise gl.vm.UserError("[EXPECTED] only admin")
+            raise gl.vm.UserError("[EXPECTED] not admin")
 
-    def _update_first_seen(self, user: Address, now: u64) -> None:
+    def _track_user(self, user: Address, now: u64) -> None:
         if user not in self.first_seen:
             self.first_seen[user] = now
 
-    def _validate_recipient(self, recipient_addr: Address) -> None:
-        if recipient_addr == _ZERO_ADDRESS:
-            raise gl.vm.UserError("[EXPECTED] zero address not allowed")
-        if recipient_addr == gl.message.contract_address:
-            raise gl.vm.UserError("[EXPECTED] self-transfer not allowed")
-
-    # ---------- listing lifecycle ----------
+    def _require_valid_recipient(self, addr: Address) -> None:
+        if addr == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] zero address")
+        if addr == gl.message.contract_address:
+            raise gl.vm.UserError("[EXPECTED] self-transfer")
 
     @gl.public.write
     def create_listing(self, title: str, description: str, price: u256) -> u256:
-        self._check_not_paused()
+        self._require_unpaused()
         if price < MIN_PRICE:
             raise gl.vm.UserError("[EXPECTED] price below minimum")
         if price > MAX_PRICE:
             raise gl.vm.UserError("[EXPECTED] price above maximum")
         title_len = u32(len(title))
         if title_len < MIN_TITLE_LENGTH or title_len > MAX_TITLE_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid title length")
+            raise gl.vm.UserError("[EXPECTED] title length")
         desc_len = u32(len(description))
         if desc_len < MIN_DESCRIPTION_LENGTH or desc_len > MAX_DESCRIPTION_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid description length")
+            raise gl.vm.UserError("[EXPECTED] description length")
 
         listing_id = self.next_trade_id
         seller = gl.message.sender_address
@@ -167,6 +158,7 @@ class Contract(gl.Contract):
             seller_evidence="",
             state=STATE_LISTING_OPEN,
             created_at=now,
+            paid_at=u64(0),
             shipped_at=u64(0),
             delivered_at=u64(0),
             disputed_at=u64(0),
@@ -177,30 +169,29 @@ class Contract(gl.Contract):
             llm_verdict_reasoning="",
             was_disputed=False,
             resolved_by_default=False,
-            paid_at=u64(0),
         )
         self.next_trade_id += u256(1)
-        self._update_first_seen(seller, now)
+        self._track_user(seller, now)
         return listing_id
 
     @gl.public.write
     def cancel_listing(self, trade_id: u256) -> None:
-        self._check_not_paused()
+        self._require_unpaused()
         trade = self.trades[trade_id]
         if gl.message.sender_address != trade.seller:
-            raise gl.vm.UserError("[EXPECTED] only seller can cancel listing")
+            raise gl.vm.UserError("[EXPECTED] not seller")
         if trade.state != STATE_LISTING_OPEN:
-            raise gl.vm.UserError("[EXPECTED] listing not cancellable in current state")
+            raise gl.vm.UserError("[EXPECTED] not cancellable")
         trade.state = STATE_CANCELLED
 
     @gl.public.write.payable
     def accept_listing(self, trade_id: u256) -> None:
-        self._check_not_paused()
+        self._require_unpaused()
         trade = self.trades[trade_id]
         if trade.state != STATE_LISTING_OPEN:
-            raise gl.vm.UserError("[EXPECTED] listing not available")
+            raise gl.vm.UserError("[EXPECTED] not available")
         if gl.message.value != trade.price:
-            raise gl.vm.UserError("[EXPECTED] incorrect payment amount")
+            raise gl.vm.UserError("[EXPECTED] payment mismatch")
         if gl.message.sender_address == trade.seller:
             raise gl.vm.UserError("[EXPECTED] seller cannot buy own listing")
         buyer = gl.message.sender_address
@@ -208,22 +199,22 @@ class Contract(gl.Contract):
         trade.buyer = buyer
         trade.paid_at = now
         trade.state = STATE_PAID
-        self._update_first_seen(buyer, now)
+        self._track_user(buyer, now)
 
     @gl.public.write
     def mark_shipped(self, trade_id: u256, tracking_number: str, tracking_carrier: str) -> None:
-        self._check_not_paused()
+        self._require_unpaused()
         trade = self.trades[trade_id]
         if gl.message.sender_address != trade.seller:
-            raise gl.vm.UserError("[EXPECTED] only seller can mark shipped")
+            raise gl.vm.UserError("[EXPECTED] not seller")
         if trade.state != STATE_PAID:
-            raise gl.vm.UserError("[EXPECTED] trade must be paid before shipping")
+            raise gl.vm.UserError("[EXPECTED] not paid")
         tn_len = u32(len(tracking_number))
         if tn_len < MIN_TRACKING_LENGTH or tn_len > MAX_TRACKING_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid tracking number")
+            raise gl.vm.UserError("[EXPECTED] tracking length")
         tc_len = u32(len(tracking_carrier))
         if tc_len < MIN_CARRIER_LENGTH or tc_len > MAX_CARRIER_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid carrier")
+            raise gl.vm.UserError("[EXPECTED] carrier length")
         trade.tracking_number = tracking_number
         trade.tracking_carrier = tracking_carrier
         trade.shipped_at = self._now()
@@ -233,9 +224,9 @@ class Contract(gl.Contract):
     def confirm_delivery(self, trade_id: u256) -> None:
         trade = self.trades[trade_id]
         if gl.message.sender_address != trade.buyer:
-            raise gl.vm.UserError("[EXPECTED] only buyer can confirm delivery")
+            raise gl.vm.UserError("[EXPECTED] not buyer")
         if trade.state != STATE_SHIPPED:
-            raise gl.vm.UserError("[EXPECTED] trade must be shipped before confirming")
+            raise gl.vm.UserError("[EXPECTED] not shipped")
         trade.delivered_at = self._now()
         self._release_to_seller(trade_id)
 
@@ -243,51 +234,47 @@ class Contract(gl.Contract):
     def claim_after_window(self, trade_id: u256) -> None:
         trade = self.trades[trade_id]
         if gl.message.sender_address != trade.seller:
-            raise gl.vm.UserError("[EXPECTED] only seller can claim after window")
+            raise gl.vm.UserError("[EXPECTED] not seller")
         if trade.state != STATE_SHIPPED:
-            raise gl.vm.UserError("[EXPECTED] only claimable in shipped state")
+            raise gl.vm.UserError("[EXPECTED] not shipped")
         now = self._now()
         if now < trade.shipped_at + DISPUTE_WINDOW_SECONDS:
-            raise gl.vm.UserError("[EXPECTED] dispute window still open")
+            raise gl.vm.UserError("[EXPECTED] dispute window open")
         trade.delivered_at = now
         self._release_to_seller(trade_id)
 
     @gl.public.write
     def claim_unshipped_refund(self, trade_id: u256) -> None:
-        # Buyer escape hatch: if the seller never ships within
-        # MAX_SHIPPING_DELAY_SECONDS, the buyer can recover the full payment.
         trade = self.trades[trade_id]
         if gl.message.sender_address != trade.buyer:
-            raise gl.vm.UserError("[EXPECTED] only buyer can claim unshipped refund")
+            raise gl.vm.UserError("[EXPECTED] not buyer")
         if trade.state != STATE_PAID:
-            raise gl.vm.UserError("[EXPECTED] trade must be paid and unshipped")
+            raise gl.vm.UserError("[EXPECTED] not paid")
         now = self._now()
         if now < trade.paid_at + MAX_SHIPPING_DELAY_SECONDS:
-            raise gl.vm.UserError("[EXPECTED] shipping window still open")
+            raise gl.vm.UserError("[EXPECTED] shipping window open")
         self.refunded_count += u256(1)
         trade.state = STATE_REFUNDED
         _EOA(trade.buyer).emit_transfer(value=trade.price)
 
-    # ---------- disputes ----------
-
     @gl.public.write.payable
     def open_dispute(self, trade_id: u256, evidence: str) -> None:
-        self._check_not_paused()
+        self._require_unpaused()
         trade = self.trades[trade_id]
         sender = gl.message.sender_address
         if sender != trade.buyer and sender != trade.seller:
-            raise gl.vm.UserError("[EXPECTED] only buyer or seller can dispute")
+            raise gl.vm.UserError("[EXPECTED] not party")
         if trade.state != STATE_SHIPPED:
-            raise gl.vm.UserError("[EXPECTED] can only dispute shipped trades")
+            raise gl.vm.UserError("[EXPECTED] not shipped")
         now = self._now()
         if now >= trade.shipped_at + DISPUTE_WINDOW_SECONDS:
             raise gl.vm.UserError("[EXPECTED] dispute window closed")
         required_bond = (trade.price * DISPUTE_BOND_BPS) // BPS_DENOMINATOR
         if gl.message.value < required_bond:
-            raise gl.vm.UserError("[EXPECTED] insufficient dispute bond")
+            raise gl.vm.UserError("[EXPECTED] bond below minimum")
         ev_len = u32(len(evidence))
         if ev_len < MIN_EVIDENCE_LENGTH or ev_len > MAX_EVIDENCE_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid evidence length")
+            raise gl.vm.UserError("[EXPECTED] evidence length")
         if sender == trade.buyer:
             trade.buyer_evidence = evidence
             trade.buyer_bond = gl.message.value
@@ -304,17 +291,17 @@ class Contract(gl.Contract):
         trade = self.trades[trade_id]
         sender = gl.message.sender_address
         if trade.state != STATE_DISPUTED:
-            raise gl.vm.UserError("[EXPECTED] no active dispute")
+            raise gl.vm.UserError("[EXPECTED] no dispute")
         if sender == trade.dispute_initiator:
-            raise gl.vm.UserError("[EXPECTED] initiator cannot respond to own dispute")
+            raise gl.vm.UserError("[EXPECTED] initiator cannot respond")
         if sender != trade.buyer and sender != trade.seller:
-            raise gl.vm.UserError("[EXPECTED] only buyer or seller can respond")
+            raise gl.vm.UserError("[EXPECTED] not party")
         required_bond = (trade.price * DISPUTE_BOND_BPS) // BPS_DENOMINATOR
         if gl.message.value < required_bond:
-            raise gl.vm.UserError("[EXPECTED] insufficient dispute bond")
+            raise gl.vm.UserError("[EXPECTED] bond below minimum")
         ev_len = u32(len(evidence))
         if ev_len < MIN_EVIDENCE_LENGTH or ev_len > MAX_EVIDENCE_LENGTH:
-            raise gl.vm.UserError("[EXPECTED] invalid evidence length")
+            raise gl.vm.UserError("[EXPECTED] evidence length")
         if sender == trade.buyer:
             trade.buyer_evidence = evidence
             trade.buyer_bond = gl.message.value
@@ -327,13 +314,13 @@ class Contract(gl.Contract):
     def claim_dispute_default(self, trade_id: u256) -> None:
         trade = self.trades[trade_id]
         if trade.state != STATE_DISPUTED:
-            raise gl.vm.UserError("[EXPECTED] no active dispute")
+            raise gl.vm.UserError("[EXPECTED] no dispute")
         if gl.message.sender_address != trade.dispute_initiator:
-            raise gl.vm.UserError("[EXPECTED] only initiator can claim default judgment")
+            raise gl.vm.UserError("[EXPECTED] not initiator")
         now = self._now()
         if now < trade.disputed_at + DISPUTE_RESPONSE_WINDOW_SECONDS:
-            raise gl.vm.UserError("[EXPECTED] response window still open")
-        trade.llm_verdict_reasoning = "default judgment: counterparty did not respond within response window"
+            raise gl.vm.UserError("[EXPECTED] response window open")
+        trade.llm_verdict_reasoning = "default judgment: no response within window"
         trade.resolved_by_default = True
         if trade.dispute_initiator == trade.buyer:
             trade.llm_verdict_buyer_wins = True
@@ -344,28 +331,23 @@ class Contract(gl.Contract):
 
     @gl.public.write
     def force_refund_stuck_dispute(self, trade_id: u256) -> None:
-        # Admin can split a stuck dispute after ADMIN_FORCE_REFUND_DELAY_SECONDS.
-        self._check_admin()
+        self._require_admin()
         trade = self.trades[trade_id]
         if trade.state != STATE_DISPUTED:
-            raise gl.vm.UserError("[EXPECTED] trade not in disputed state")
+            raise gl.vm.UserError("[EXPECTED] not disputed")
         now = self._now()
         if now < trade.disputed_at + ADMIN_FORCE_REFUND_DELAY_SECONDS:
-            raise gl.vm.UserError("[EXPECTED] force refund delay still pending")
+            raise gl.vm.UserError("[EXPECTED] admin delay pending")
         self._refund_stuck_dispute(trade_id)
 
     @gl.public.write
     def claim_stuck_dispute_refund(self, trade_id: u256) -> None:
-        # Public fallback: anyone can trigger the split after
-        # PUBLIC_FORCE_REFUND_DELAY_SECONDS so funds aren't held hostage
-        # if the admin is unreachable. The split is deterministic so there
-        # is no griefing risk in letting any caller invoke this.
         trade = self.trades[trade_id]
         if trade.state != STATE_DISPUTED:
-            raise gl.vm.UserError("[EXPECTED] trade not in disputed state")
+            raise gl.vm.UserError("[EXPECTED] not disputed")
         now = self._now()
         if now < trade.disputed_at + PUBLIC_FORCE_REFUND_DELAY_SECONDS:
-            raise gl.vm.UserError("[EXPECTED] public refund delay still pending")
+            raise gl.vm.UserError("[EXPECTED] public delay pending")
         self._refund_stuck_dispute(trade_id)
 
     def _resolve_dispute_with_llm(self, trade_id: u256) -> None:
@@ -418,10 +400,9 @@ Respond with a JSON object with exactly these keys:
 }}"""
 
         def leader_fn():
-            prompt = build_prompt()
-            result = gl.nondet.exec_prompt(prompt, response_format='json')
+            result = gl.nondet.exec_prompt(build_prompt(), response_format='json')
             if not isinstance(result, dict):
-                raise gl.vm.UserError("[LLM_ERROR] llm returned non-dict")
+                raise gl.vm.UserError("[LLM_ERROR] non-dict response")
             verdict = str(result.get("verdict", "")).upper()
             if verdict not in ("BUYER", "SELLER"):
                 for alt in ("decision", "winner", "result"):
@@ -434,7 +415,7 @@ Respond with a JSON object with exactly these keys:
                             verdict = "SELLER"
                             break
             if verdict not in ("BUYER", "SELLER"):
-                raise gl.vm.UserError("[LLM_ERROR] llm did not return a valid verdict")
+                raise gl.vm.UserError("[LLM_ERROR] invalid verdict")
             reasoning = str(result.get("reasoning", ""))[:max_reasoning]
             return {"verdict": verdict, "reasoning": reasoning}
 
@@ -468,8 +449,6 @@ Respond with a JSON object with exactly these keys:
         else:
             self._payout_dispute_seller_wins(trade_id)
 
-    # ---------- payouts ----------
-
     def _release_to_seller(self, trade_id: u256) -> None:
         trade = self.trades[trade_id]
         seller_amount = trade.price - trade.fee_amount
@@ -482,7 +461,6 @@ Respond with a JSON object with exactly these keys:
 
     def _payout_dispute_buyer_wins(self, trade_id: u256) -> None:
         trade = self.trades[trade_id]
-        # Buyer recovers payment + own bond + the loser's forfeited bond.
         refund = trade.price + trade.buyer_bond + trade.seller_bond
         self.completed_count += u256(1)
         self.disputed_count += u256(1)
@@ -500,112 +478,105 @@ Respond with a JSON object with exactly these keys:
         _EOA(trade.seller).emit_transfer(value=seller_amount)
 
     def _payout_dispute_default(self, trade_id: u256, buyer_wins: bool) -> None:
-        # Default judgment: the responder never showed up, so they posted no
-        # bond and there is nothing to forfeit. The initiator wins outright;
-        # we do NOT penalise them — punishing the winner of a legitimate
-        # default would discourage legitimate disputes.
         trade = self.trades[trade_id]
+        if buyer_wins:
+            initiator_bond = trade.buyer_bond
+        else:
+            initiator_bond = trade.seller_bond
+        penalty = (initiator_bond * DEFAULT_JUDGMENT_PENALTY_BPS) // BPS_DENOMINATOR
+        bond_returned = initiator_bond - penalty
+
+        self.fees_collected += penalty
         self.completed_count += u256(1)
         self.disputed_count += u256(1)
         trade.state = STATE_COMPLETED
 
         if buyer_wins:
-            payout = trade.price + trade.buyer_bond
+            payout = trade.price + bond_returned
             _EOA(trade.buyer).emit_transfer(value=payout)
         else:
             self.total_volume += trade.price
             self.fees_collected += trade.fee_amount
-            payout = (trade.price - trade.fee_amount) + trade.seller_bond
+            payout = (trade.price - trade.fee_amount) + bond_returned
             _EOA(trade.seller).emit_transfer(value=payout)
 
     def _refund_stuck_dispute(self, trade_id: u256) -> None:
-        # Both parties abandoned the dispute. Without evidence either way,
-        # split the disputed payment 50/50 and return each party's bond.
-        # Odd-wei remainder goes to the seller (arbitrary, documented).
         trade = self.trades[trade_id]
         self.refunded_count += u256(1)
         trade.state = STATE_REFUNDED
-
         buyer_share = trade.price // u256(2)
         seller_share = trade.price - buyer_share
-
         buyer_refund = buyer_share + trade.buyer_bond
         seller_refund = seller_share + trade.seller_bond
-
         if buyer_refund > u256(0):
             _EOA(trade.buyer).emit_transfer(value=buyer_refund)
         if seller_refund > u256(0):
             _EOA(trade.seller).emit_transfer(value=seller_refund)
 
-    # ---------- admin ----------
-
     @gl.public.write
     def pause(self) -> None:
-        self._check_admin()
+        self._require_admin()
         self.paused = True
 
     @gl.public.write
     def unpause(self) -> None:
-        self._check_admin()
+        self._require_admin()
         self.paused = False
 
     @gl.public.write
     def set_authorized_fee_sender(self, fee_sender: str) -> None:
-        self._check_admin()
+        self._require_admin()
         self.authorized_fee_sender = Address(fee_sender)
 
     @gl.public.write
     def withdraw_fees(self, recipient: str, amount: u256) -> None:
-        self._check_admin()
+        self._require_admin()
         if amount == u256(0):
-            raise gl.vm.UserError("[EXPECTED] amount must be positive")
+            raise gl.vm.UserError("[EXPECTED] zero amount")
         if amount > self.fees_collected:
-            raise gl.vm.UserError("[EXPECTED] insufficient fees collected")
+            raise gl.vm.UserError("[EXPECTED] amount exceeds balance")
         recipient_addr = Address(recipient)
-        self._validate_recipient(recipient_addr)
+        self._require_valid_recipient(recipient_addr)
         self.fees_collected -= amount
         _EOA(recipient_addr).emit_transfer(value=amount)
 
     @gl.public.write
     def withdraw_external_fees(self, recipient: str, amount: u256) -> None:
-        self._check_admin()
+        self._require_admin()
         if amount == u256(0):
-            raise gl.vm.UserError("[EXPECTED] amount must be positive")
+            raise gl.vm.UserError("[EXPECTED] zero amount")
         if amount > self.received_external_fees:
-            raise gl.vm.UserError("[EXPECTED] insufficient external fees")
+            raise gl.vm.UserError("[EXPECTED] amount exceeds balance")
         recipient_addr = Address(recipient)
-        self._validate_recipient(recipient_addr)
+        self._require_valid_recipient(recipient_addr)
         self.received_external_fees -= amount
         _EOA(recipient_addr).emit_transfer(value=amount)
 
     @gl.public.write
     def transfer_admin(self, new_admin: str) -> None:
-        self._check_admin()
+        self._require_admin()
         new_admin_addr = Address(new_admin)
         if new_admin_addr == _ZERO_ADDRESS:
-            raise gl.vm.UserError("[EXPECTED] zero address not allowed")
+            raise gl.vm.UserError("[EXPECTED] zero address")
         self.admin = new_admin_addr
 
     @gl.public.write
     def upgrade(self, new_code: bytes) -> None:
-        self._check_admin()
+        self._require_admin()
         root = gl.storage.Root.get()
         code = root.code.get()
         code.truncate()
         code.extend(new_code)
 
     @gl.public.write.payable
-    def __receive__(self) -> None:
-        self._check_not_paused()
+    def receive_fee(self) -> None:
         if gl.message.value == u256(0):
-            raise gl.vm.UserError("[EXPECTED] zero value transfer")
+            raise gl.vm.UserError("[EXPECTED] zero value")
         if self.authorized_fee_sender == _ZERO_ADDRESS:
-            raise gl.vm.UserError("[EXPECTED] no authorized fee sender configured")
+            raise gl.vm.UserError("[EXPECTED] sender not configured")
         if gl.message.sender_address != self.authorized_fee_sender:
             raise gl.vm.UserError("[EXPECTED] sender not authorized")
         self.received_external_fees += gl.message.value
-
-    # ---------- views ----------
 
     @gl.public.view
     def get_trade_state(self, trade_id: u256) -> u8:
@@ -674,8 +645,6 @@ Respond with a JSON object with exactly these keys:
 
     @gl.public.view
     def get_eligible_trade_count_in_window(self, window_start: u64, window_end: u64) -> dict:
-        # Returns a dict so callers can detect when the count was truncated
-        # by MAX_ELIGIBLE_TRADES_LOOKBACK.
         if window_start >= ELIGIBILITY_PERIOD_SECONDS:
             eligibility_cutoff = window_start - ELIGIBILITY_PERIOD_SECONDS
         else:
@@ -715,6 +684,135 @@ Respond with a JSON object with exactly these keys:
             count += u256(1)
 
         return {
+            "count": str(count),
+            "truncated": bool(truncated),
+            "scanned": str(n - start_i),
+            "total_eligible_records": str(n),
+        }
+
+    @gl.public.view
+    def get_volume_in_window(self, window_start: u64, window_end: u64) -> dict:
+        n = u256(len(self.eligible_trades))
+        if n == u256(0):
+            return {
+                "volume": "0",
+                "count": "0",
+                "truncated": False,
+                "scanned": "0",
+                "total_eligible_records": "0",
+            }
+
+        truncated = n > MAX_ELIGIBLE_TRADES_LOOKBACK
+        if truncated:
+            start_i = n - MAX_ELIGIBLE_TRADES_LOOKBACK
+        else:
+            start_i = u256(0)
+
+        volume = u256(0)
+        count = u256(0)
+        i = start_i
+        while i < n:
+            trade_id = self.eligible_trades[int(i)]
+            i += u256(1)
+            trade = self.trades[trade_id]
+            if trade.delivered_at < window_start or trade.delivered_at > window_end:
+                continue
+            volume += trade.price
+            count += u256(1)
+
+        return {
+            "volume": str(volume),
+            "count": str(count),
+            "truncated": bool(truncated),
+            "scanned": str(n - start_i),
+            "total_eligible_records": str(n),
+        }
+
+    @gl.public.view
+    def get_dispute_rate_in_window_bps(self, window_start: u64, window_end: u64) -> dict:
+        n = u256(len(self.eligible_trades))
+        if n == u256(0):
+            return {
+                "rate_bps": "0",
+                "disputed_count": "0",
+                "total_count": "0",
+                "truncated": False,
+                "scanned": "0",
+                "total_eligible_records": "0",
+            }
+
+        truncated = n > MAX_ELIGIBLE_TRADES_LOOKBACK
+        if truncated:
+            start_i = n - MAX_ELIGIBLE_TRADES_LOOKBACK
+        else:
+            start_i = u256(0)
+
+        total = u256(0)
+        disputed = u256(0)
+        i = start_i
+        while i < n:
+            trade_id = self.eligible_trades[int(i)]
+            i += u256(1)
+            trade = self.trades[trade_id]
+            if trade.delivered_at < window_start or trade.delivered_at > window_end:
+                continue
+            total += u256(1)
+            if trade.was_disputed:
+                disputed += u256(1)
+
+        if total == u256(0):
+            rate_bps = u256(0)
+        else:
+            rate_bps = (disputed * BPS_DENOMINATOR) // total
+
+        return {
+            "rate_bps": str(rate_bps),
+            "disputed_count": str(disputed),
+            "total_count": str(total),
+            "truncated": bool(truncated),
+            "scanned": str(n - start_i),
+            "total_eligible_records": str(n),
+        }
+
+    @gl.public.view
+    def get_avg_price_in_window(self, window_start: u64, window_end: u64) -> dict:
+        n = u256(len(self.eligible_trades))
+        if n == u256(0):
+            return {
+                "avg_price": "0",
+                "volume": "0",
+                "count": "0",
+                "truncated": False,
+                "scanned": "0",
+                "total_eligible_records": "0",
+            }
+
+        truncated = n > MAX_ELIGIBLE_TRADES_LOOKBACK
+        if truncated:
+            start_i = n - MAX_ELIGIBLE_TRADES_LOOKBACK
+        else:
+            start_i = u256(0)
+
+        volume = u256(0)
+        count = u256(0)
+        i = start_i
+        while i < n:
+            trade_id = self.eligible_trades[int(i)]
+            i += u256(1)
+            trade = self.trades[trade_id]
+            if trade.delivered_at < window_start or trade.delivered_at > window_end:
+                continue
+            volume += trade.price
+            count += u256(1)
+
+        if count == u256(0):
+            avg = u256(0)
+        else:
+            avg = volume // count
+
+        return {
+            "avg_price": str(avg),
+            "volume": str(volume),
             "count": str(count),
             "truncated": bool(truncated),
             "scanned": str(n - start_i),
