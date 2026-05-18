@@ -97,3 +97,7 @@ yarn-error.log*
 tmp/
 temp/
 *.bak
+
+# Frontend Next.js project has its own lib/ that must be tracked
+!frontend/lib/
+!frontend/lib/**

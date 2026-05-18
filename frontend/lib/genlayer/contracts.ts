@@ -1,0 +1,51 @@
+import type { Address } from "./types";
+
+/**
+ * Deployed contract addresses per network. Studionet is the primary
+ * deployment target for the MVP.
+ *
+ * The `getAddresses` helper returns `any` for the address fields because
+ * genlayer-js v0.7 uses a branded internal Address type that is not
+ * exported. Treating addresses as opaque here is the documented workaround
+ * (matches the boilerplate at genlayerlabs/genlayer-project-boilerplate
+ * which uses Vue + JS, not TS strict).
+ */
+
+export type NetworkKey = "studionet" | "testnetAsimov" | "testnetBradbury";
+
+export interface NetworkAddresses {
+  marketplace: Address;
+  predictionMarket: Address;
+}
+
+export const ADDRESSES: Record<NetworkKey, NetworkAddresses | null> = {
+  studionet: {
+    marketplace: "0x29f58D5ACC8b85250D3Dae2692DEADED346c6e67" as Address,
+    predictionMarket:
+      "0x2b0B5f76Db290D77DF53250B7f0540fc2D8cb48E" as Address,
+  },
+  testnetAsimov: null,
+  testnetBradbury: null,
+};
+
+export const DEFAULT_NETWORK: NetworkKey = "studionet";
+
+/**
+ * Returns the contract addresses for a given network. The return type uses
+ * `any` for address fields to allow direct interop with the genlayer-js SDK
+ * `Address` type, which is a branded `0x${string} & { length: 42 }` and is
+ * not publicly exported.
+ */
+export function getAddresses(network: NetworkKey): {
+  marketplace: any;
+  predictionMarket: any;
+} {
+  const entry = ADDRESSES[network];
+  if (entry === null) {
+    throw new Error(
+      `PointMarket has no deployed contracts on ${network} yet. ` +
+        `Switch to studionet or check config/networks.ts.`,
+    );
+  }
+  return entry;
+}
