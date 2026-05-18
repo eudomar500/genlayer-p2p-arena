@@ -1,4 +1,4 @@
-# Demo Results — End-to-End On-Chain Validation
+# Demo Results: End-to-End On-Chain Validation
 
 Studionet execution of the genlayer-p2p-arena protocol on May 17, 2026.
 
@@ -38,9 +38,9 @@ The path to the active v1.0.4 deploy required intermediate iterations to resolve
 | `0x01349a80c43026DE878bcBe24805bdCc615AaCe8` | 1.0.4 | Orphaned | Same source as the active v1.0.4 but deployed from the buyer wallet by mistake, so `admin` was set to the buyer address. Redeployed from admin wallet at the active address |
 | `0x2b0B5f76Db290D77DF53250B7f0540fc2D8cb48E` | 1.0.4 | **Active** | Final active contract for the end-to-end run |
 
-The bugs in v1.0.1 and v1.0.2 are documented in detail in `PREDICTION_MARKET_DESIGN.md` (Bugs 8 and 9) and as threat model entries T-PM-22 and T-PM-23 in `SECURITY.md`. They are characteristic of the GenVM storage model and were not visible to static analysis or linting — they only surfaced at runtime under real consensus execution.
+The bugs in v1.0.1 and v1.0.2 are documented in detail in `PREDICTION_MARKET_DESIGN.md` (Bugs 8 and 9) and as threat model entries T-PM-22 and T-PM-23 in `SECURITY.md`. They are characteristic of the GenVM storage model and were not visible to static analysis or linting; they only surfaced at runtime under real consensus execution.
 
-The v1.0.3 → v1.0.4 transition is not a bug fix. It is a product decision to reduce timing constants so GenLayer evaluators can observe the full market lifecycle in a single review session. See the section "Demo timing constants" below for the full rationale.
+The v1.0.3 -> v1.0.4 transition is not a bug fix. It is a product decision to reduce timing constants so GenLayer evaluators can observe the full market lifecycle in a single review session. See the section "Demo timing constants" below for the full rationale.
 
 ## Demo timing constants
 
@@ -54,7 +54,7 @@ For the v1.0.4 deployment, two timing constants were reduced from their producti
 
 ### Why reduced
 
-A full create → bet → close → settle → resolve → claim cycle takes 25+ hours with production values, which makes single-session evaluation impossible. With demo values it takes 10-15 minutes. Logic is identical under both regimes — only wall-clock duration changes. Validators, consensus rules, payout math, and threat mitigations are unchanged.
+A full create -> bet -> close -> settle -> resolve -> claim cycle takes 25+ hours with production values, which makes single-session evaluation impossible. With demo values it takes 10-15 minutes. Logic is identical under both regimes (only wall-clock duration changes). Validators, consensus rules, payout math, and threat mitigations are unchanged.
 
 ### Why this is a transparent compromise
 
@@ -71,7 +71,7 @@ Before mainnet:
 3. Remove T-PM-24 from the active threat model.
 4. Fresh deploy (no migration path exists for these constants by design).
 
-## Phase A — Marketplace trade lifecycle
+## Phase A: Marketplace trade lifecycle
 
 A single trade was executed end-to-end through the Marketplace's happy path to populate `eligible_trades` and provide a target for the PredictionMarket subjective markets.
 
@@ -92,7 +92,7 @@ A single trade was executed end-to-end through the Marketplace's happy path to p
 | 1 | `create_listing` | seller | `1779037594` | trade_id 0, state `LISTING_OPEN (0)` |
 | 2 | `accept_listing` (value 1 GEN) | buyer | `1779038097` (+8m 23s) | state `PAID (1)` |
 | 3 | `mark_shipped` (tracking `1Z999AA10123456784`, carrier `UPS`) | seller | `1779038282` (+3m 5s) | state `SHIPPED (2)` |
-| 4 | `confirm_delivery` | buyer | `1779038569` (+4m 47s) | state `COMPLETED (4)`, 0.98 GEN → seller, 0.02 GEN → contract fees |
+| 4 | `confirm_delivery` | buyer | `1779038569` (+4m 47s) | state `COMPLETED (4)`, 0.98 GEN -> seller, 0.02 GEN -> contract fees |
 
 All four transactions reached `FINALIZED` + `SUCCESS` + `Accepted`. Hashes can be retrieved at:
 `https://explorer-studio.genlayer.com/address/0x29f58D5ACC8b85250D3Dae2692DEADED346c6e67`
@@ -113,7 +113,7 @@ All four transactions reached `FINALIZED` + `SUCCESS` + `Accepted`. Hashes can b
 
 Trade 0 was appended to the contract's `eligible_trades` array, making it visible to PredictionMarket queries.
 
-## Phase B — PredictionMarket market creation
+## Phase B: PredictionMarket market creation
 
 Two subjective markets were created in the active PredictionMarket v1.0.4, both targeting Trade 0 with the metric `METRIC_LLM_TRADE_DESCRIPTION_HONEST` (100). They differ in their betting outcomes:
 
@@ -122,7 +122,7 @@ Two subjective markets were created in the active PredictionMarket v1.0.4, both 
 
 The reason Market 0 has only one bettor is documented in the next phase.
 
-### Market 0 — single-bettor (edge case)
+### Market 0: single-bettor (edge case)
 
 | Field | Value |
 |---|---|
@@ -135,7 +135,7 @@ The reason Market 0 has only one bettor is documented in the next phase.
 | `settlement_at` | `1779057437` (~7 min after close) |
 | Creator | admin |
 
-### Market 1 — competing pools (canonical case)
+### Market 1: competing pools (canonical case)
 
 | Field | Value |
 |---|---|
@@ -150,16 +150,16 @@ The reason Market 0 has only one bettor is documented in the next phase.
 
 Both markets passed `create_subjective_market`'s cross-contract validation: PredictionMarket called `get_trade_summary(0)` on the Marketplace and confirmed the trade existed before persisting the market.
 
-## Phase C — Betting
+## Phase C: Betting
 
-### Market 0 — bets placed
+### Market 0: bets placed
 
 | Step | Method | From | Result |
 |---|---|---|---|
 | C0.1 | `place_bet(0, true)` (value 1 GEN) | admin | `yes_pool = 1 GEN`, `total_predictions[admin] += 1` |
 | C0.2 | `place_bet(0, false)` (value 1 GEN) | buyer | **REVERTED** with `[EXPECTED] betting closed` |
 
-The buyer attempted to bet on Market 0 with the intended NO position. The transaction failed because the betting window had already closed at `betting_close_at = 1779057019`. This was a wall-clock outcome of the demo session — wallet switching and parameter entry consumed the available window.
+The buyer attempted to bet on Market 0 with the intended NO position. The transaction failed because the betting window had already closed at `betting_close_at = 1779057019`. This was a wall-clock outcome of the demo session: wallet switching and parameter entry consumed the available window.
 
 This failure was preserved in the demo evidence rather than retried because it validates a specific protocol guarantee:
 
@@ -167,7 +167,7 @@ This failure was preserved in the demo evidence rather than retried because it v
 
 The lesson informed Market 1's timing: a 28-minute betting window with 30 minutes of total margin, well above the 5-minute minimum.
 
-### Market 1 — bets placed (competing pools)
+### Market 1: bets placed (competing pools)
 
 | Step | Method | From | Result |
 |---|---|---|---|
@@ -178,11 +178,11 @@ Both transactions reached `FINALIZED` + `SUCCESS` + `Accepted`. Final pool state
 
 The successful C1.2 also validates that the v1.0.4 `get_or_insert_default(market_id)` pattern correctly handles a second user joining an existing nested map. The first bet (C1.1) created the per-market `TreeMap[Address, BetData]`. The second bet (C1.2) retrieved the existing nested map and inserted a new key without runtime errors.
 
-## Phase D — LLM resolution
+## Phase D: LLM resolution
 
 Both markets passed `settlement_at` and were resolved via the permissionless `resolve_market(market_id)` method. Each resolution invoked five validators independently running diverse LLMs (Optimistic Democracy consensus).
 
-The resolver path was `_resolve_subjective` → `_resolve_description_honest`, which constructs a prompt from:
+The resolver path was `_resolve_subjective` -> `_resolve_description_honest`, which constructs a prompt from:
 
 - Listing title and description (read from Marketplace via `get_listing_details(0)`)
 - Trade outcome state (read from Marketplace via `get_trade_summary(0)`): `was_disputed = false`, `llm_verdict_buyer_wins = false`, `resolved_by_default = false`
@@ -209,10 +209,10 @@ The resolver path was `_resolve_subjective` → `_resolve_description_honest`, w
 
 ### LLM convergence analysis
 
-Both verdicts are YES. The reasoning fields differ in wording — independently produced by different validators on different markets — but converge on the same logical structure:
+Both verdicts are YES. The reasoning fields differ in wording (independently produced by different validators on different markets) but converge on the same logical structure:
 
 1. Identify the dispute-or-not status of the underlying trade.
-2. Apply the documented heuristic: no dispute → presumption of honest description.
+2. Apply the documented heuristic: no dispute -> presumption of honest description.
 3. Return the conclusion with calibrated language ("likely", "indicating", "implies").
 
 This is the expected behavior of Optimistic Democracy: semantic convergence without lexical identity. Validators running heterogeneous LLMs reach the same conclusion through their own reasoning paths.
@@ -237,9 +237,9 @@ That is exactly 0.01 GEN (Market 0) + 0.02 GEN (Market 1) = 0.03 GEN. This confi
 
 The two counters (`fees_collected` for Marketplace's own trade fees, `received_external_fees` for PredictionMarket-forwarded fees) remain independently trackable for transparent accounting.
 
-## Phase E — Claims and reputation
+## Phase E: Claims and reputation
 
-### Market 0 — admin claim (single bettor scenario)
+### Market 0: admin claim (single bettor scenario)
 
 | Method | From | Outcome |
 |---|---|---|
@@ -247,7 +247,7 @@ The two counters (`fees_collected` for Marketplace's own trade fees, `received_e
 
 Math: yes_pool = 1 GEN, total_pool = 1 GEN, fee = 0.01 GEN, available_after_fee = 0.99 GEN. Admin held 100% of the YES side, so received 100% of the after-fee pool.
 
-Net flow: admin invested 1 GEN, received 0.99 GEN. Net loss of 0.01 GEN (the protocol fee). This demonstrates that a single-bettor market still pays the protocol fee — there is no escape hatch for "self-rescue" via thin participation.
+Net flow: admin invested 1 GEN, received 0.99 GEN. Net loss of 0.01 GEN (the protocol fee). This demonstrates that a single-bettor market still pays the protocol fee. There is no escape hatch for "self-rescue" via thin participation.
 
 Final state of Market 0:
 ```json
@@ -270,7 +270,7 @@ Final bet record:
 }
 ```
 
-### Market 1 — admin claim (competing pools, winning side)
+### Market 1: admin claim (competing pools, winning side)
 
 | Method | From | Outcome |
 |---|---|---|
@@ -280,7 +280,7 @@ Math: yes_pool = 1 GEN, total_pool = 2 GEN, fee = 0.02 GEN, available_after_fee 
 
 Net flow: admin invested 1 GEN, received 1.98 GEN. Net gain of 0.98 GEN (98% ROI on a winning bet).
 
-### Market 1 — buyer claim attempt (losing side)
+### Market 1: buyer claim attempt (losing side)
 
 | Method | From | Outcome |
 |---|---|---|
@@ -361,7 +361,7 @@ The demo exercised the following entries from `SECURITY.md`. Each row pairs a th
 | ID | Threat | Validated by |
 |---|---|---|
 | T1 | Reentrancy in payout paths | `_release_to_seller` completed without re-entry. Seller received 0.98 GEN atomically post state-transition. |
-| T2 | State machine bypass | Trade 0 transitioned `LISTING_OPEN → PAID → SHIPPED → COMPLETED`, each transition gated by its specific predecessor state. No transitions were skipped. |
+| T2 | State machine bypass | Trade 0 transitioned `LISTING_OPEN -> PAID -> SHIPPED -> COMPLETED`, each transition gated by its specific predecessor state. No transitions were skipped. |
 | T3 | Per-method access control | `accept_listing` was called by buyer (not seller); `mark_shipped` and `create_listing` by seller. `set_authorized_fee_sender` was admin-only. |
 | T4 | Metrics integrity | `total_volume` and `fees_collected` incremented exactly once per completion. `received_external_fees` tracked separately from `fees_collected`. |
 | T6 | Numeric integrity | All wei computations settled exactly. 0.98 GEN payout + 0.02 GEN fee = 1 GEN price, no rounding loss. |
@@ -382,9 +382,9 @@ The demo exercised the following entries from `SECURITY.md`. Each row pairs a th
 | T-PM-16 | Winning side has zero bettors | Market 0 had `no_pool = 0` but `yes_pool > 0`, and YES won. The contract correctly proceeded with the standard payout path (not the refund path), validating the asymmetric guard in `_finalize_resolution`. |
 | T-PM-19 | Market over non-existent trade | Both `create_subjective_market` calls verified Trade 0 existed via `get_trade_summary(0)` before persisting. |
 | T-PM-20 | Market resolves over non-terminal trade | Trade 0 was in `COMPLETED (4)` state at resolution; both markets proceeded with subjective resolution. |
-| T-PM-22 | Nested TreeMap RHS init | Implicitly validated by the v1.0.1 → v1.0.2 → v1.0.3 iteration: the v1.0.1 deploy correctly reverted with the documented `AssertionError`, confirming GenVM's storage runtime enforces descriptor matching. |
-| T-PM-23 | Nested TreeMap KeyError | Implicitly validated by the v1.0.2 → v1.0.3 iteration: v1.0.2 reverted with `KeyError` on first bet, confirming that GenVM does not auto-vivify nested entries. v1.0.4 (with `get_or_insert_default`) executed without error. |
-| T-PM-24 | Demo timing reduction documented | All demo timings are clearly attributable to the v1.0.3 → v1.0.4 product decision. The constants are visible in source, in `CHANGELOG.md`, and in this document. |
+| T-PM-22 | Nested TreeMap RHS init | Implicitly validated by the v1.0.1 -> v1.0.2 -> v1.0.3 iteration: the v1.0.1 deploy correctly reverted with the documented `AssertionError`, confirming GenVM's storage runtime enforces descriptor matching. |
+| T-PM-23 | Nested TreeMap KeyError | Implicitly validated by the v1.0.2 -> v1.0.3 iteration: v1.0.2 reverted with `KeyError` on first bet, confirming that GenVM does not auto-vivify nested entries. v1.0.4 (with `get_or_insert_default`) executed without error. |
+| T-PM-24 | Demo timing reduction documented | All demo timings are clearly attributable to the v1.0.3 -> v1.0.4 product decision. The constants are visible in source, in `CHANGELOG.md`, and in this document. |
 
 ### Cross-contract threats
 

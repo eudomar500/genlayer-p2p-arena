@@ -8,7 +8,7 @@ A trust-minimized P2P marketplace with an integrated meta-prediction market, bui
 
 Two contracts that share one substrate:
 
-**1. Escrow-backed P2P marketplace.** Buyers and sellers transact physical goods peer-to-peer. Payment is locked in the contract until delivery is confirmed. When disputes occur, an AI-validator quorum reads both parties' evidence and adjudicates — no human arbiter, no centralized appeals.
+**1. Escrow-backed P2P marketplace.** Buyers and sellers transact physical goods peer-to-peer. Payment is locked in the contract until delivery is confirmed. When disputes occur, an AI-validator quorum reads both parties' evidence and adjudicates. No human arbiter, no centralized appeals.
 
 **2. Meta-prediction market over marketplace activity.** Binary prediction markets resolve against on-chain Marketplace state. Two categories of markets are supported:
 
@@ -63,7 +63,7 @@ Source code in this repository matches the deployed bytecode. Version constants 
 
 A full end-to-end run was executed on Studionet on May 17, 2026. The on-chain evidence covers:
 
-- One Marketplace trade (Sony WH-1000XM4 headphones, 1 GEN) created, paid, shipped, delivered — happy path with 0.98 GEN to seller and 0.02 GEN to fees.
+- One Marketplace trade (Sony WH-1000XM4 headphones, 1 GEN) created, paid, shipped, delivered (happy path with 0.98 GEN to seller and 0.02 GEN to fees).
 - Two subjective PredictionMarket markets over that trade, both targeting metric `METRIC_LLM_TRADE_DESCRIPTION_HONEST`.
 - Five-validator LLM consensus resolving both markets to YES, with independently produced reasoning strings.
 - 0.03 GEN of total fees forwarded cross-contract from PredictionMarket to Marketplace via `receive_fee`.
@@ -99,12 +99,12 @@ The demo deployment uses reduced timing constants (5 minutes instead of 1 hour /
 
 All technical documentation is in `docs/`. Quick links:
 
-- **What's the system architecture?** → `docs/ARCHITECTURE.md`
-- **How does the PredictionMarket work?** → `docs/PREDICTION_MARKET_DESIGN.md`
-- **What are the security guarantees?** → `docs/SECURITY.md`
-- **What's been validated on-chain?** → `docs/DEMO_RESULTS.md`
-- **How do I run this locally?** → `docs/SETUP.md`
-- **What's the version history?** → `CHANGELOG.md`
+- **What's the system architecture?** -> `docs/ARCHITECTURE.md`
+- **How does the PredictionMarket work?** -> `docs/PREDICTION_MARKET_DESIGN.md`
+- **What are the security guarantees?** -> `docs/SECURITY.md`
+- **What's been validated on-chain?** -> `docs/DEMO_RESULTS.md`
+- **How do I run this locally?** -> `docs/SETUP.md`
+- **What's the version history?** -> `CHANGELOG.md`
 
 ## Status and roadmap
 
