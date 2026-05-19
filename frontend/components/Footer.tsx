@@ -11,7 +11,7 @@ export default function Footer() {
           <div className="flex flex-col items-start">
             <Wordmark size="sm" withSignature />
             <p className="mt-4 text-sm text-[var(--text-secondary)] max-w-xs">
-              Trustless P2P marketplace and meta-prediction market on GenLayer.
+              Trustless P2P marketplace + meta-prediction market. Powered by AI consensus on GenLayer.
             </p>
           </div>
 

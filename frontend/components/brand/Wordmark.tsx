@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, useAnimation } from "framer-motion";
 import { useScrollDot } from "./ScrollDotContext";
 
@@ -9,6 +9,7 @@ interface WordmarkProps {
   variant?: "dark" | "light";
   withSignature?: boolean;
   isHero?: boolean;
+  dotRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const sizeMap = {
@@ -23,18 +24,21 @@ export default function Wordmark({
   variant,
   withSignature = false,
   isHero = false,
+  dotRef,
 }: WordmarkProps) {
   const height = sizeMap[size];
-  const sigSize = Math.max(10, height * 0.18);
   const letters = "pointmarket".split("");
   
   const { introState } = useScrollDot();
   const controls = useAnimation();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    console.log("[Wordmark] introState changed:", introState, "isHero:", isHero);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (isHero && introState === "playing") {
-      console.log("[Wordmark] starting letter wave!");
       controls.start((i) => ({
         y: [0, -6, 0],
         transition: {
@@ -50,26 +54,24 @@ export default function Wordmark({
   return (
     <div className={`flex flex-col ${withSignature ? "items-start" : ""}`}>
       {/* 
-        OPTION C: Layered approach. 
-        HTML spans for perfectly clean Framer Motion transforms.
-        SVG wrapper for the dot to guarantee 100% pixel-perfect positioning.
+        Linear Proportional Layout:
+        Using HTML flex layout instead of absolute SVG positioning guarantees the dot
+        stays proportionally pegged to the 't' regardless of font hinting or rendering
+        differences across sizes.
       */}
       <div 
-        className="relative"
-        style={{ height, width: height * 5 }}
+        className="flex items-baseline"
+        style={{ height }}
       >
-        {/* Layer 1: HTML letters */}
         <div 
-          className="absolute inset-0 flex items-end"
+          className="flex items-baseline"
           style={{ 
             color: "var(--text-primary)",
             fontFamily: "var(--font-inter)",
             fontSize: height * 0.84,
             fontWeight: 500,
             letterSpacing: "-0.04em",
-            // SVG baseline is y=75 on a 100px canvas (25px from bottom).
-            paddingBottom: height * 0.25,
-            lineHeight: 0, // Forces the flex item's bottom edge to be the exact baseline
+            lineHeight: 1
           }}
         >
           {letters.map((l, i) => (
@@ -84,30 +86,69 @@ export default function Wordmark({
           ))}
         </div>
 
-        {/* Layer 2: Exact SVG dot */}
-        <svg
-          viewBox="0 0 500 100"
-          className="absolute inset-0 pointer-events-none overflow-visible"
-          style={{ width: "100%", height: "100%" }}
+        {/* 
+          Large static dot in flow:
+          marginLeft provides a strict, proportional gap at every scale.
+          translateY(50%) aligns its center perfectly with the baseline.
+        */}
+        <div 
+          className="rounded-full shrink-0 relative"
+          style={{
+            backgroundColor: "var(--accent-primary)",
+            width: height * 0.28,
+            height: height * 0.28,
+            marginLeft: height * 0.05,
+            transform: "translateY(50%)"
+          }}
         >
-          <circle cx="488" cy="75" r="14" fill="var(--accent-primary)" />
-        </svg>
+          {dotRef && (
+            <div 
+              ref={dotRef}
+              className="absolute pointer-events-none"
+              style={mounted ? {
+                // Anchor starts precisely at the center of the large dot
+                top: "50%",
+                left: "50%",
+                // Translate diagonally at exactly 45 degrees.
+                // Diagonal Distance = largeDotRadius + smallDotRadius(7) + smallDotDiameter(14) = largeDotRadius + 21
+                // dx = dy = DiagonalDistance * cos(45deg)
+                transform: `translate(${(height * 0.14 + 21) * 0.7071}px, -${(height * 0.14 + 21) * 0.7071}px)`,
+                width: 0,
+                height: 0
+              } : {
+                // Hydration-safe initial state
+                top: 0,
+                left: 0,
+                width: 0,
+                height: 0,
+                opacity: 0
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {withSignature && (
-        <div className="flex items-center gap-1.5 mt-1 opacity-80 pl-1">
+        <div className="flex items-center mt-1 pl-1">
           <span
-            className="font-mono text-[var(--text-secondary)] uppercase tracking-widest"
-            style={{ fontSize: sigSize, lineHeight: 1 }}
+            className="font-mono text-[var(--text-tertiary)]"
+            style={{ fontSize: 12, lineHeight: 1 }}
           >
             by
           </span>
-          <svg width={sigSize} height={sigSize} viewBox="0 0 10 10">
-            <circle cx="5" cy="5" r="5" fill="var(--accent-primary)" />
-          </svg>
           <span
-            className="font-mono text-[var(--text-secondary)] uppercase tracking-widest"
-            style={{ fontSize: sigSize, lineHeight: 1 }}
+            className="rounded-full"
+            style={{
+              backgroundColor: "var(--accent-primary)",
+              width: 8,
+              height: 8,
+              marginLeft: 6,
+              marginRight: 6,
+            }}
+          />
+          <span
+            className="font-mono text-[var(--text-tertiary)]"
+            style={{ fontSize: 12, lineHeight: 1 }}
           >
             islandlabs
           </span>

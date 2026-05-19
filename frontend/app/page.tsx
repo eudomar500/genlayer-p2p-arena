@@ -103,17 +103,7 @@ export default function Page() {
           variants={fadeUp}
         >
           <div className="relative inline-block">
-            <Wordmark size="xl" isHero={true} />
-            <div 
-              ref={heroRef} 
-              className="absolute opacity-0 pointer-events-none" 
-              style={{ 
-                right: "-10px", 
-                bottom: "57px", 
-                width: "0px", 
-                height: "0px" 
-              }} 
-            />
+            <Wordmark size="xl" isHero={true} dotRef={heroRef} />
           </div>
           
           <p className="mt-8 text-[var(--text-secondary)] max-w-lg text-lg">
