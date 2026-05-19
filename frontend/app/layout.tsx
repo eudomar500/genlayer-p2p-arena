@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import Nav from "../components/Nav";
+import Footer from "../components/Footer";
+import LenisProvider from "../components/LenisProvider";
+import { ScrollDotProvider } from "../components/brand/ScrollDotContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -64,8 +68,31 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                let theme = localStorage.getItem('theme');
+                if (!theme) {
+                  theme = 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        {children}
+        <ScrollDotProvider>
+          <LenisProvider>
+            <Nav />
+            <main className="min-h-screen pt-16">
+              {children}
+            </main>
+            <Footer />
+          </LenisProvider>
+        </ScrollDotProvider>
       </body>
     </html>
   );
