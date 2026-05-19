@@ -5,9 +5,19 @@ import Link from "next/link";
 import Wordmark from "./brand/Wordmark";
 import ThemeToggle from "./ThemeToggle";
 import { useScrollDot } from "./brand/ScrollDotContext";
+import { useWalletStore } from "../lib/wallet/store";
+import AccountMenu from "./wallet/AccountMenu";
+import ConnectWalletModal from "./wallet/ConnectWalletModal";
+import { useState, useEffect } from "react";
 
 export default function Nav() {
   const { scrollToSection, activeSection } = useScrollDot();
+  const { status, initSilentReconnect } = useWalletStore();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    initSilentReconnect();
+  }, [initSilentReconnect]);
 
   const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, section: string) => {
     e.preventDefault();
@@ -68,23 +78,23 @@ export default function Nav() {
 
           {/* Group 3: Actions */}
           <div className="flex items-center gap-4">
-            <div className="relative group flex items-center">
+            {status === "connected" ? (
+              <AccountMenu />
+            ) : (
               <button
                 type="button"
-                disabled
-                className="bg-[var(--accent-primary)] text-[var(--bg-deep)] px-4 py-2 rounded-md font-medium text-sm disabled:opacity-50 transition-opacity"
+                onClick={() => setIsModalOpen(true)}
+                className="bg-[var(--accent-primary)] text-[var(--bg-deep)] px-4 py-2 rounded-md font-medium text-sm hover:bg-[var(--accent-dim)] transition-colors"
               >
                 Connect Wallet
               </button>
-              {/* Tooltip */}
-              <div className="absolute top-full right-0 mt-2 whitespace-nowrap bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs px-3 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                Phase 2 -- coming soon
-              </div>
-            </div>
+            )}
             <ThemeToggle />
           </div>
         </div>
       </div>
+
+      <ConnectWalletModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </nav>
   );
 }

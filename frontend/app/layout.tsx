@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "sonner";
 import Nav from "../components/Nav";
 import Footer from "../components/Footer";
 import LenisProvider from "../components/LenisProvider";
 import { ScrollDotProvider } from "../components/brand/ScrollDotContext";
+import QueryProvider from "../components/QueryProvider";
+import NetworkSwitchBanner from "../components/wallet/NetworkSwitchBanner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -61,11 +64,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function RootLayout(props: any) {
+  const { children, profile } = props;
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
@@ -84,15 +85,20 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        <ScrollDotProvider>
-          <LenisProvider>
-            <Nav />
-            <main className="min-h-screen pt-16">
-              {children}
-            </main>
-            <Footer />
-          </LenisProvider>
-        </ScrollDotProvider>
+        <QueryProvider>
+          <ScrollDotProvider>
+            <LenisProvider>
+              <Nav />
+              <NetworkSwitchBanner />
+              <main className="min-h-screen pt-16">
+                {children}
+              </main>
+              {profile}
+              <Footer />
+              <Toaster position="bottom-right" theme="dark" />
+            </LenisProvider>
+          </ScrollDotProvider>
+        </QueryProvider>
       </body>
     </html>
   );
