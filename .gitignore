@@ -106,3 +106,13 @@ temp/
 AGENTS.md
 implementation_plan.md
 .antigravity/
+
+# --- AI assistant artifacts (never commit) ---
+**/AGENTS.md
+**/implementation_plan.md
+.antigravity/
+**/.antigravity/
+
+# --- Whitelist frontend/lib (overrides Python lib/) ---
+!frontend/lib/
+!frontend/lib/**
