@@ -236,7 +236,7 @@ export default function Page() {
         >
           <div className="mb-12 relative">
             <div ref={statsRef} className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 -translate-x-8 opacity-0 hidden md:block" />
-            <h2 className="text-3xl font-medium tracking-tight">Live on Studionet.</h2>
+            <h2 className="text-3xl font-medium tracking-tight">Live on Testnet Bradbury.</h2>
             <p className="mt-2 text-xs font-mono text-[var(--text-secondary)]">
               0x29f58...c6e67 + 0x2b0B5f...cb48E
             </p>
@@ -334,7 +334,7 @@ export default function Page() {
           
           <div className="mb-12">
             <h2 className="text-3xl font-medium tracking-tight">Recent activity.</h2>
-            <p className="mt-2 text-[var(--text-secondary)]">Direct from Studionet.</p>
+            <p className="mt-2 text-[var(--text-secondary)]">Direct from Testnet Bradbury.</p>
           </div>
 
           <div className="w-full overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-deep)]">

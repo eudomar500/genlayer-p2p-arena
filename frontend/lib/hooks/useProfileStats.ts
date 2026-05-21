@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DEFAULT_NETWORK } from "@/lib/genlayer/contracts";
 import { fetchGenBalance } from "../wallet/balance";
 import { createReadClient } from "../genlayer/client";
 import {
@@ -39,14 +40,14 @@ export function useProfileStats(address: string) {
   return useQuery({
     queryKey: ["profileStats", address],
     queryFn: async (): Promise<ProfileStats> => {
-      const client = createReadClient("studionet");
+      const client = createReadClient(DEFAULT_NETWORK);
       const userAddr = address as Address;
 
       // 1. Balance
       const balance = await fetchGenBalance(address);
 
       // 2. Reputation
-      const reputation = await getUserReputation(client, "studionet", userAddr);
+      const reputation = await getUserReputation(client, DEFAULT_NETWORK, userAddr);
       const totalBets = Number(reputation.total_predictions);
       const correctBets = Number(reputation.correct_predictions);
       const winRate = totalBets > 0 ? (correctBets / totalBets) * 100 : 0;
@@ -58,7 +59,7 @@ export function useProfileStats(address: string) {
 
       // 3. Marketplace Stats
       // TODO: replace with indexer in Phase 7
-      const nextTradeId = await getNextTradeId(client, "studionet");
+      const nextTradeId = await getNextTradeId(client, DEFAULT_NETWORK);
       let tradesAsSeller = 0;
       let tradesAsBuyer = 0;
       let completedTrades = 0;
@@ -69,7 +70,7 @@ export function useProfileStats(address: string) {
 
       for (let i = 0; i < Number(nextTradeId); i++) {
         try {
-          const trade = await getTradeSummary(client, "studionet", i);
+          const trade = await getTradeSummary(client, DEFAULT_NETWORK, i);
           const isSeller = trade.seller.toLowerCase() === address.toLowerCase();
           const isBuyer = trade.buyer.toLowerCase() === address.toLowerCase();
 
@@ -100,11 +101,11 @@ export function useProfileStats(address: string) {
 
       // 4. Predictions Stats
       // TODO: replace with indexer in Phase 7
-      const nextMarketId = await getNextMarketId(client, "studionet");
+      const nextMarketId = await getNextMarketId(client, DEFAULT_NETWORK);
       let betsPlaced = 0;
       for (let i = 0; i < Number(nextMarketId); i++) {
         try {
-          const bet = await getUserBet(client, "studionet", i, userAddr);
+          const bet = await getUserBet(client, DEFAULT_NETWORK, i, userAddr);
           // A bet exists if the user has placed any amount on yes OR no
           if (bet && bet.exists && (BigInt(bet.yes_amount) > 0n || BigInt(bet.no_amount) > 0n)) {
             betsPlaced++;

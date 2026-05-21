@@ -35,7 +35,7 @@ export default function MarketplacePage() {
           Marketplace
         </h1>
         <p className="text-[var(--text-secondary)] max-w-2xl">
-          Trustless P2P trades on GenLayer Studionet. All trades settle on-chain with optional LLM-arbitrated disputes.
+          Trustless P2P trades on GenLayer. All trades settle on-chain with optional LLM-arbitrated disputes.
         </p>
       </header>
       
