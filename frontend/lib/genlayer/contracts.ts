@@ -25,10 +25,14 @@ export const ADDRESSES: Record<NetworkKey, NetworkAddresses | null> = {
       "0x2b0B5f76Db290D77DF53250B7f0540fc2D8cb48E" as Address,
   },
   testnetAsimov: null,
-  testnetBradbury: null,
+  testnetBradbury: {
+    marketplace: "0x68546F0a8d2Af91d5917A03245c1D31296487b3F" as Address,
+    predictionMarket:
+      "0x10717D9814Ace2098862299C26806a2899eAB204" as Address,
+  },
 };
 
-export const DEFAULT_NETWORK: NetworkKey = "studionet";
+export const DEFAULT_NETWORK: NetworkKey = "testnetBradbury";
 
 /**
  * Returns the contract addresses for a given network. The return type uses
