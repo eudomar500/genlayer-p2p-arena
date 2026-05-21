@@ -62,18 +62,18 @@ export default function Nav() {
 
           {/* Group 2: Pages */}
           <div className="hidden lg:flex items-center gap-6 text-[var(--text-secondary)]">
-            <Link href="/marketplace" className="hover:text-[var(--text-primary)] transition-colors">
+            <Link href="/marketplace" className="text-[var(--text-primary)] font-semibold transition-colors">
               Marketplace
             </Link>
-            <Link href="/markets" className="hover:text-[var(--text-primary)] transition-colors">
+            <span className="opacity-50 cursor-not-allowed" title="Coming in Phase 5">
               Markets
-            </Link>
-            <Link href="/analytics" className="hover:text-[var(--text-primary)] transition-colors">
+            </span>
+            <span className="opacity-50 cursor-not-allowed" title="Coming in Phase 6">
               Analytics
-            </Link>
-            <Link href="/docs" className="hover:text-[var(--text-primary)] transition-colors">
+            </span>
+            <span className="opacity-50 cursor-not-allowed">
               Docs
-            </Link>
+            </span>
           </div>
 
           {/* Group 3: Actions */}
