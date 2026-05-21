@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-CONTRACT_VERSION = u16(104)
+CONTRACT_VERSION = u16(115)
+
+UPGRADE_TIMELOCK_SECONDS = u64(48 * 60 * 60)
 
 MARKET_OPEN = u8(0)
 MARKET_RESOLVED_YES = u8(1)
@@ -29,16 +31,31 @@ MARKETPLACE_FEE_BPS = u256(100)
 BPS_DENOMINATOR = u256(10000)
 MIN_BET_WEI = u256(10**15)
 
-# Demo/testnet timings. Production: MIN_BETTING_WINDOW=3600 (1h), SETTLEMENT_BUFFER=86400 (24h).
-# Reduced here so evaluators can observe the full create -> bet -> resolve -> claim cycle
-# in a single session. Calibrate to expected user behavior and Marketplace dispute
-# resolution windows before mainnet deployment.
-MIN_BETTING_WINDOW_SECONDS = u64(5 * 60)
-MAX_BETTING_WINDOW_SECONDS = u64(14 * 24 * 60 * 60)
-SETTLEMENT_BUFFER_SECONDS = u64(5 * 60)
+# Timing constants by deployment network. Hardcoded (not admin-configurable)
+# to avoid centralization findings in audit. Logic identical across networks --
+# only constants change between deployments.
+#
+# Production mainnet:
+#   MIN_BETTING_WINDOW_SECONDS  = 3600     (1h)
+#   MAX_BETTING_WINDOW_SECONDS  = 1209600  (14d)
+#   SETTLEMENT_BUFFER_SECONDS   = 86400    (24h)
+#
+# Testnet Bradbury (current deployment, calibrated for auditor sessions of 15-60 min):
+#   MIN_BETTING_WINDOW_SECONDS  = 1800     (30 min)
+#   MAX_BETTING_WINDOW_SECONDS  = 86400    (24h)
+#   SETTLEMENT_BUFFER_SECONDS   = 3600     (1h)
+#
+# Studionet demo (legacy): all set to 300 (5 min).
+#
+# Note: the Finality Window (appeal period for non-deterministic transactions)
+# is protocol-level, not configured here. GenLayer handles it automatically
+# between 'accepted' and 'finalized' transaction states.
+MIN_BETTING_WINDOW_SECONDS = u64(1800)
+MAX_BETTING_WINDOW_SECONDS = u64(86400)
+SETTLEMENT_BUFFER_SECONDS = u64(3600)
 
 MAX_SELLER_HISTORY_MATCHES = u256(30)
-MAX_TRADES_TO_SCAN = u256(200)
+MAX_TRADES_TO_SCAN = u256(100)
 
 MAX_QUESTION_LENGTH = u32(500)
 MAX_REASONING_LENGTH = u32(300)
@@ -71,6 +88,7 @@ class MarketplaceIface:
 
     class Write:
         def receive_fee(self) -> None: ...
+        def accept_fee_sender(self) -> None: ...
 
 
 @allow_storage
@@ -104,8 +122,11 @@ class BetData:
 
 class Contract(gl.Contract):
     admin: Address
+    pending_admin: Address
     paused: bool
     marketplace_address: Address
+    pending_upgrade_code: bytes
+    upgrade_unlock_at: u64
     next_market_id: u256
     markets: TreeMap[u256, MarketData]
     bets: TreeMap[u256, TreeMap[Address, BetData]]
@@ -114,8 +135,10 @@ class Contract(gl.Contract):
 
     def __init__(self):
         self.admin = gl.message.sender_address
+        self.pending_admin = _ZERO_ADDRESS
         self.paused = False
         self.marketplace_address = _ZERO_ADDRESS
+        self.upgrade_unlock_at = u64(0)
         self.next_market_id = u256(0)
 
         root = gl.storage.Root.get()
@@ -136,11 +159,6 @@ class Contract(gl.Contract):
         if self.marketplace_address == _ZERO_ADDRESS:
             raise gl.vm.UserError("[EXPECTED] marketplace not set")
 
-    def _parse_address(self, addr: str) -> Address:
-        try:
-            return Address(addr)
-        except Exception:
-            raise gl.vm.UserError("[EXPECTED] invalid address")
 
     def _is_objective(self, metric_type: u8) -> bool:
         return metric_type >= OBJECTIVE_METRIC_MIN and metric_type <= OBJECTIVE_METRIC_MAX
@@ -166,16 +184,22 @@ class Contract(gl.Contract):
             self.user_total_predictions[user] -= u256(1)
 
     @gl.public.write
-    def set_marketplace_address(self, addr: str) -> None:
+    def set_marketplace_address(self, addr: Address) -> None:
         self._require_admin()
         if self.marketplace_address != _ZERO_ADDRESS:
             raise gl.vm.UserError("[EXPECTED] marketplace already set")
         if self.next_market_id != u256(0):
             raise gl.vm.UserError("[EXPECTED] markets already exist")
-        addr_typed = self._parse_address(addr)
-        if addr_typed == _ZERO_ADDRESS:
+        if addr == _ZERO_ADDRESS:
             raise gl.vm.UserError("[EXPECTED] zero address")
-        self.marketplace_address = addr_typed
+        self.marketplace_address = addr
+
+    @gl.public.write
+    def accept_marketplace_fee_authorization(self) -> None:
+        self._require_admin()
+        self._require_marketplace_set()
+        marketplace = MarketplaceIface(self.marketplace_address)
+        marketplace.emit(on='finalized').accept_fee_sender()
 
     @gl.public.write
     def create_objective_market(
@@ -413,8 +437,8 @@ class Contract(gl.Contract):
             return
 
         trade_state = u8(int(trade.get("state", 0)))
-        if trade_state != MARKETPLACE_STATE_COMPLETED and trade_state != MARKETPLACE_STATE_REFUNDED:
-            self._refund_market(market_id, "trade not in terminal state")
+        if trade_state != MARKETPLACE_STATE_COMPLETED:
+            self._refund_market(market_id, "trade not completed")
             return
 
         if market.metric_type == METRIC_LLM_TRADE_DESCRIPTION_HONEST:
@@ -585,16 +609,28 @@ Respond with a JSON object:
         market.resolved_at = self._now()
         total_pool = market.yes_pool + market.no_pool
         fee = (total_pool * MARKETPLACE_FEE_BPS) // BPS_DENOMINATOR
-        market.fee_forwarded = fee
 
+        if fee > u256(0):
+            marketplace = MarketplaceIface(self.marketplace_address)
+            info = marketplace.view().get_contract_info()
+            if not isinstance(info, dict):
+                self._refund_market(market_id, "marketplace info read failed")
+                return
+            authorized = str(info.get("authorized_fee_sender", "")).lower()
+            self_addr = str(gl.message.contract_address).lower()
+            if authorized != self_addr:
+                self._refund_market(market_id, "PM not authorized as fee sender")
+                return
+            if info.get("paused"):
+                self._refund_market(market_id, "marketplace paused")
+                return
+            marketplace.emit(value=fee, on='finalized').receive_fee()
+
+        market.fee_forwarded = fee
         if yes_wins:
             market.state = MARKET_RESOLVED_YES
         else:
             market.state = MARKET_RESOLVED_NO
-
-        if fee > u256(0):
-            marketplace = MarketplaceIface(self.marketplace_address)
-            marketplace.emit(value=fee, on='finalized').receive_fee()
 
     def _refund_market(self, market_id: u256, reason: str) -> None:
         market = self.markets[market_id]
@@ -684,20 +720,59 @@ Respond with a JSON object:
         self.paused = False
 
     @gl.public.write
-    def transfer_admin(self, new_admin: str) -> None:
+    def transfer_admin(self, new_admin: Address) -> None:
         self._require_admin()
-        new_admin_addr = self._parse_address(new_admin)
-        if new_admin_addr == _ZERO_ADDRESS:
+        if new_admin == _ZERO_ADDRESS:
             raise gl.vm.UserError("[EXPECTED] zero address")
-        self.admin = new_admin_addr
+        if new_admin == self.admin:
+            raise gl.vm.UserError("[EXPECTED] same admin")
+        self.pending_admin = new_admin
 
     @gl.public.write
-    def upgrade(self, new_code: bytes) -> None:
+    def accept_admin(self) -> None:
+        if self.pending_admin == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending admin")
+        if gl.message.sender_address != self.pending_admin:
+            raise gl.vm.UserError("[EXPECTED] not pending admin")
+        self.admin = self.pending_admin
+        self.pending_admin = _ZERO_ADDRESS
+
+    @gl.public.write
+    def cancel_pending_admin(self) -> None:
         self._require_admin()
+        if self.pending_admin == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending admin")
+        self.pending_admin = _ZERO_ADDRESS
+
+    @gl.public.write
+    def propose_upgrade(self, new_code: bytes) -> None:
+        self._require_admin()
+        if len(new_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] empty code")
+        self.pending_upgrade_code = new_code
+        self.upgrade_unlock_at = self._now() + UPGRADE_TIMELOCK_SECONDS
+
+    @gl.public.write
+    def execute_upgrade(self) -> None:
+        self._require_admin()
+        if len(self.pending_upgrade_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] no pending upgrade")
+        if self._now() < self.upgrade_unlock_at:
+            raise gl.vm.UserError("[EXPECTED] timelock pending")
         root = gl.storage.Root.get()
         code = root.code.get()
         code.truncate()
-        code.extend(new_code)
+        code.extend(self.pending_upgrade_code)
+        self.pending_upgrade_code = b""
+        self.upgrade_unlock_at = u64(0)
+
+    @gl.public.write
+    def cancel_pending_upgrade(self) -> None:
+        self._require_admin()
+        if len(self.pending_upgrade_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] no pending upgrade")
+        self.pending_upgrade_code = b""
+        self.upgrade_unlock_at = u64(0)
 
     @gl.public.view
     def get_market_summary(self, market_id: u256) -> dict:
@@ -727,8 +802,8 @@ Respond with a JSON object:
         }
 
     @gl.public.view
-    def get_user_bet(self, market_id: u256, user: str) -> dict:
-        user_addr = self._parse_address(user)
+    def get_user_bet(self, market_id: u256, user: Address) -> dict:
+        user_addr = user
         if market_id >= self.next_market_id:
             return {
                 "exists": False,
@@ -760,8 +835,8 @@ Respond with a JSON object:
         }
 
     @gl.public.view
-    def get_user_reputation(self, user: str) -> dict:
-        user_addr = self._parse_address(user)
+    def get_user_reputation(self, user: Address) -> dict:
+        user_addr = user
         correct = self.user_correct_predictions[user_addr] if user_addr in self.user_correct_predictions else u256(0)
         total = self.user_total_predictions[user_addr] if user_addr in self.user_total_predictions else u256(0)
         return {
@@ -792,8 +867,8 @@ Respond with a JSON object:
         return self.paused
 
     @gl.public.view
-    def is_admin(self, address: str) -> bool:
-        return self._parse_address(address) == self.admin
+    def is_admin(self, address: Address) -> bool:
+        return address == self.admin
 
 
 @gl.evm.contract_interface

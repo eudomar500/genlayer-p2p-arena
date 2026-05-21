@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-CONTRACT_VERSION = u16(144)
+CONTRACT_VERSION = u16(147)
+
+UPGRADE_TIMELOCK_SECONDS = u64(48 * 60 * 60)
 
 STATE_LISTING_OPEN = u8(0)
 STATE_PAID = u8(1)
@@ -77,8 +79,12 @@ class TradeData:
 
 class Contract(gl.Contract):
     admin: Address
+    pending_admin: Address
     paused: bool
     authorized_fee_sender: Address
+    pending_fee_sender: Address
+    pending_upgrade_code: bytes
+    upgrade_unlock_at: u64
     next_trade_id: u256
     trades: TreeMap[u256, TradeData]
     first_seen: TreeMap[Address, u64]
@@ -92,8 +98,11 @@ class Contract(gl.Contract):
 
     def __init__(self):
         self.admin = gl.message.sender_address
+        self.pending_admin = _ZERO_ADDRESS
         self.paused = False
         self.authorized_fee_sender = _ZERO_ADDRESS
+        self.pending_fee_sender = _ZERO_ADDRESS
+        self.upgrade_unlock_at = u64(0)
         self.next_trade_id = u256(0)
         self.fees_collected = u256(0)
         self.received_external_fees = u256(0)
@@ -162,7 +171,7 @@ class Contract(gl.Contract):
             shipped_at=u64(0),
             delivered_at=u64(0),
             disputed_at=u64(0),
-            dispute_initiator=seller,
+            dispute_initiator=_ZERO_ADDRESS,
             buyer_bond=u256(0),
             seller_bond=u256(0),
             llm_verdict_buyer_wins=False,
@@ -475,6 +484,7 @@ Respond with a JSON object with exactly these keys:
         self.disputed_count += u256(1)
         self.total_volume += trade.price
         trade.state = STATE_COMPLETED
+        self.eligible_trades.append(trade_id)
         _EOA(trade.seller).emit_transfer(value=seller_amount)
 
     def _payout_dispute_default(self, trade_id: u256, buyer_wins: bool) -> None:
@@ -497,6 +507,7 @@ Respond with a JSON object with exactly these keys:
         else:
             self.total_volume += trade.price
             self.fees_collected += trade.fee_amount
+            self.eligible_trades.append(trade_id)
             payout = (trade.price - trade.fee_amount) + bond_returned
             _EOA(trade.seller).emit_transfer(value=payout)
 
@@ -524,52 +535,117 @@ Respond with a JSON object with exactly these keys:
         self.paused = False
 
     @gl.public.write
-    def set_authorized_fee_sender(self, fee_sender: str) -> None:
+    def set_authorized_fee_sender(self, fee_sender: Address) -> None:
         self._require_admin()
-        self.authorized_fee_sender = Address(fee_sender)
+        if fee_sender == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] zero address")
+        if fee_sender == self.authorized_fee_sender:
+            raise gl.vm.UserError("[EXPECTED] same fee sender")
+        self.pending_fee_sender = fee_sender
 
     @gl.public.write
-    def withdraw_fees(self, recipient: str, amount: u256) -> None:
+    def accept_fee_sender(self) -> None:
+        if self.pending_fee_sender == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending fee sender")
+        if gl.message.sender_address != self.pending_fee_sender:
+            raise gl.vm.UserError("[EXPECTED] not pending fee sender")
+        self.authorized_fee_sender = self.pending_fee_sender
+        self.pending_fee_sender = _ZERO_ADDRESS
+
+    @gl.public.write
+    def cancel_pending_fee_sender(self) -> None:
+        self._require_admin()
+        if self.pending_fee_sender == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending fee sender")
+        self.pending_fee_sender = _ZERO_ADDRESS
+
+    @gl.public.write
+    def clear_authorized_fee_sender(self) -> None:
+        self._require_admin()
+        if self.authorized_fee_sender == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] already cleared")
+        self.authorized_fee_sender = _ZERO_ADDRESS
+
+    @gl.public.write
+    def withdraw_fees(self, recipient: Address, amount: u256) -> None:
         self._require_admin()
         if amount == u256(0):
             raise gl.vm.UserError("[EXPECTED] zero amount")
         if amount > self.fees_collected:
             raise gl.vm.UserError("[EXPECTED] amount exceeds balance")
-        recipient_addr = Address(recipient)
-        self._require_valid_recipient(recipient_addr)
+        self._require_valid_recipient(recipient)
         self.fees_collected -= amount
-        _EOA(recipient_addr).emit_transfer(value=amount)
+        _EOA(recipient).emit_transfer(value=amount)
 
     @gl.public.write
-    def withdraw_external_fees(self, recipient: str, amount: u256) -> None:
+    def withdraw_external_fees(self, recipient: Address, amount: u256) -> None:
         self._require_admin()
         if amount == u256(0):
             raise gl.vm.UserError("[EXPECTED] zero amount")
         if amount > self.received_external_fees:
             raise gl.vm.UserError("[EXPECTED] amount exceeds balance")
-        recipient_addr = Address(recipient)
-        self._require_valid_recipient(recipient_addr)
+        self._require_valid_recipient(recipient)
         self.received_external_fees -= amount
-        _EOA(recipient_addr).emit_transfer(value=amount)
+        _EOA(recipient).emit_transfer(value=amount)
 
     @gl.public.write
-    def transfer_admin(self, new_admin: str) -> None:
+    def transfer_admin(self, new_admin: Address) -> None:
         self._require_admin()
-        new_admin_addr = Address(new_admin)
-        if new_admin_addr == _ZERO_ADDRESS:
+        if new_admin == _ZERO_ADDRESS:
             raise gl.vm.UserError("[EXPECTED] zero address")
-        self.admin = new_admin_addr
+        if new_admin == self.admin:
+            raise gl.vm.UserError("[EXPECTED] same admin")
+        self.pending_admin = new_admin
 
     @gl.public.write
-    def upgrade(self, new_code: bytes) -> None:
+    def accept_admin(self) -> None:
+        if self.pending_admin == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending admin")
+        if gl.message.sender_address != self.pending_admin:
+            raise gl.vm.UserError("[EXPECTED] not pending admin")
+        self.admin = self.pending_admin
+        self.pending_admin = _ZERO_ADDRESS
+
+    @gl.public.write
+    def cancel_pending_admin(self) -> None:
         self._require_admin()
+        if self.pending_admin == _ZERO_ADDRESS:
+            raise gl.vm.UserError("[EXPECTED] no pending admin")
+        self.pending_admin = _ZERO_ADDRESS
+
+    @gl.public.write
+    def propose_upgrade(self, new_code: bytes) -> None:
+        self._require_admin()
+        if len(new_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] empty code")
+        self.pending_upgrade_code = new_code
+        self.upgrade_unlock_at = self._now() + UPGRADE_TIMELOCK_SECONDS
+
+    @gl.public.write
+    def execute_upgrade(self) -> None:
+        self._require_admin()
+        if len(self.pending_upgrade_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] no pending upgrade")
+        if self._now() < self.upgrade_unlock_at:
+            raise gl.vm.UserError("[EXPECTED] timelock pending")
         root = gl.storage.Root.get()
         code = root.code.get()
         code.truncate()
-        code.extend(new_code)
+        code.extend(self.pending_upgrade_code)
+        self.pending_upgrade_code = b""
+        self.upgrade_unlock_at = u64(0)
+
+    @gl.public.write
+    def cancel_pending_upgrade(self) -> None:
+        self._require_admin()
+        if len(self.pending_upgrade_code) == 0:
+            raise gl.vm.UserError("[EXPECTED] no pending upgrade")
+        self.pending_upgrade_code = b""
+        self.upgrade_unlock_at = u64(0)
 
     @gl.public.write.payable
     def receive_fee(self) -> None:
+        self._require_unpaused()
         if gl.message.value == u256(0):
             raise gl.vm.UserError("[EXPECTED] zero value")
         if self.authorized_fee_sender == _ZERO_ADDRESS:
@@ -636,6 +712,10 @@ Respond with a JSON object with exactly these keys:
             "admin": str(self.admin),
             "paused": bool(self.paused),
             "authorized_fee_sender": str(self.authorized_fee_sender),
+            "pending_fee_sender": str(self.pending_fee_sender),
+            "pending_admin": str(self.pending_admin),
+            "upgrade_unlock_at": int(self.upgrade_unlock_at),
+            "has_pending_upgrade": bool(len(self.pending_upgrade_code) > 0),
             "total_trades": str(self.next_trade_id),
         }
 
@@ -692,6 +772,10 @@ Respond with a JSON object with exactly these keys:
 
     @gl.public.view
     def get_volume_in_window(self, window_start: u64, window_end: u64) -> dict:
+        if window_start >= ELIGIBILITY_PERIOD_SECONDS:
+            eligibility_cutoff = window_start - ELIGIBILITY_PERIOD_SECONDS
+        else:
+            eligibility_cutoff = u64(0)
         n = u256(len(self.eligible_trades))
         if n == u256(0):
             return {
@@ -717,6 +801,14 @@ Respond with a JSON object with exactly these keys:
             trade = self.trades[trade_id]
             if trade.delivered_at < window_start or trade.delivered_at > window_end:
                 continue
+            if trade.buyer not in self.first_seen:
+                continue
+            if trade.seller not in self.first_seen:
+                continue
+            buyer_first = self.first_seen[trade.buyer]
+            seller_first = self.first_seen[trade.seller]
+            if buyer_first > eligibility_cutoff or seller_first > eligibility_cutoff:
+                continue
             volume += trade.price
             count += u256(1)
 
@@ -730,6 +822,10 @@ Respond with a JSON object with exactly these keys:
 
     @gl.public.view
     def get_dispute_rate_in_window_bps(self, window_start: u64, window_end: u64) -> dict:
+        if window_start >= ELIGIBILITY_PERIOD_SECONDS:
+            eligibility_cutoff = window_start - ELIGIBILITY_PERIOD_SECONDS
+        else:
+            eligibility_cutoff = u64(0)
         n = u256(len(self.eligible_trades))
         if n == u256(0):
             return {
@@ -756,6 +852,14 @@ Respond with a JSON object with exactly these keys:
             trade = self.trades[trade_id]
             if trade.delivered_at < window_start or trade.delivered_at > window_end:
                 continue
+            if trade.buyer not in self.first_seen:
+                continue
+            if trade.seller not in self.first_seen:
+                continue
+            buyer_first = self.first_seen[trade.buyer]
+            seller_first = self.first_seen[trade.seller]
+            if buyer_first > eligibility_cutoff or seller_first > eligibility_cutoff:
+                continue
             total += u256(1)
             if trade.was_disputed:
                 disputed += u256(1)
@@ -776,6 +880,10 @@ Respond with a JSON object with exactly these keys:
 
     @gl.public.view
     def get_avg_price_in_window(self, window_start: u64, window_end: u64) -> dict:
+        if window_start >= ELIGIBILITY_PERIOD_SECONDS:
+            eligibility_cutoff = window_start - ELIGIBILITY_PERIOD_SECONDS
+        else:
+            eligibility_cutoff = u64(0)
         n = u256(len(self.eligible_trades))
         if n == u256(0):
             return {
@@ -802,6 +910,14 @@ Respond with a JSON object with exactly these keys:
             trade = self.trades[trade_id]
             if trade.delivered_at < window_start or trade.delivered_at > window_end:
                 continue
+            if trade.buyer not in self.first_seen:
+                continue
+            if trade.seller not in self.first_seen:
+                continue
+            buyer_first = self.first_seen[trade.buyer]
+            seller_first = self.first_seen[trade.seller]
+            if buyer_first > eligibility_cutoff or seller_first > eligibility_cutoff:
+                continue
             volume += trade.price
             count += u256(1)
 
@@ -820,8 +936,8 @@ Respond with a JSON object with exactly these keys:
         }
 
     @gl.public.view
-    def is_admin(self, address: str) -> bool:
-        return Address(address) == self.admin
+    def is_admin(self, address: Address) -> bool:
+        return address == self.admin
 
 
 @gl.evm.contract_interface
