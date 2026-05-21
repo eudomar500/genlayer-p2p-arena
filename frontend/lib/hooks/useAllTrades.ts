@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DEFAULT_NETWORK } from "@/lib/genlayer/contracts";
 import { getTradeSummary, getListingDetails } from "@/lib/genlayer/reads";
 import { createReadClient } from "@/lib/genlayer/client";
 import { useMarketplaceMetrics } from "./useMarketplaceMetrics";
@@ -26,7 +27,7 @@ export function useAllTrades() {
     queryFn: async (): Promise<TradeListItem[]> => {
       if (total === 0) return [];
 
-      const client = createReadClient("studionet");
+      const client = createReadClient(DEFAULT_NETWORK);
       const promises: Promise<TradeListItem>[] = [];
       for (let i = 0; i < total; i++) {
         promises.push(fetchTradeBundle(client, i));
@@ -42,8 +43,8 @@ import type { ReadClient } from "@/lib/genlayer/client";
 
 async function fetchTradeBundle(client: ReadClient, id: number): Promise<TradeListItem> {
   const [listing, summary] = await Promise.all([
-    getListingDetails(client, "studionet", id),
-    getTradeSummary(client, "studionet", id),
+    getListingDetails(client, DEFAULT_NETWORK, id),
+    getTradeSummary(client, DEFAULT_NETWORK, id),
   ]);
   return {
     id,

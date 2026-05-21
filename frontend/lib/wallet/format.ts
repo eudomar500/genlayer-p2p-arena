@@ -1,4 +1,6 @@
 import { formatUnits } from "viem";
+import { DEFAULT_NETWORK } from "../genlayer/contracts";
+import { NETWORKS } from "@/config/networks";
 
 export function truncateAddress(address: string, prefixLength = 6, suffixLength = 4): string {
   if (!address || address.length < prefixLength + suffixLength) return address;
@@ -20,6 +22,7 @@ export function isValidAddress(value: string): boolean {
 }
 
 export function explorerAddressUrl(address: string): string {
-  // Use GenLayer Studionet explorer
-  return `https://explorer-studio.genlayer.com/address/${address}`;
+  const explorer = NETWORKS[DEFAULT_NETWORK].explorerUrl;
+  if (!explorer) return "";
+  return `${explorer}/address/${address}`;
 }
