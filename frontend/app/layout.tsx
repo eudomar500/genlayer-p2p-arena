@@ -8,6 +8,7 @@ import LenisProvider from "../components/LenisProvider";
 import { ScrollDotProvider } from "../components/brand/ScrollDotContext";
 import QueryProvider from "../components/QueryProvider";
 import NetworkSwitchBanner from "../components/wallet/NetworkSwitchBanner";
+import TxRuntime from "../components/tx/TxRuntime";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -95,6 +96,7 @@ export default function RootLayout(props: any) {
               </main>
               {profile}
               <Footer />
+              <TxRuntime />
               <Toaster position="bottom-right" theme="dark" />
             </LenisProvider>
           </ScrollDotProvider>
