@@ -24,7 +24,10 @@ const STEPS: { key: ActiveStateProp; label: string }[] = [
 function stepStatus(
   currentIndex: number,
   stepIndex: number,
+  totalSteps: number,
 ): "done" | "active" | "pending" {
+  // Terminal state: if the TX has reached the final step, all steps are done.
+  if (currentIndex === totalSteps - 1) return "done";
   if (stepIndex < currentIndex) return "done";
   if (stepIndex === currentIndex) return "active";
   return "pending";
@@ -40,7 +43,7 @@ export default function TxProgressBar({ uiState }: TxProgressBarProps) {
   return (
     <div className="flex items-center gap-1">
       {STEPS.map((step, idx) => {
-        const status = stepStatus(currentIndex, idx);
+        const status = stepStatus(currentIndex, idx, STEPS.length);
         return (
           <React.Fragment key={step.key}>
             <StepCircle status={status} label={step.label} />

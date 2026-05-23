@@ -1,7 +1,7 @@
 "use client";
 import { useTxStore } from "./store";
 import { type TxRawStatus, TX_TTL_MS } from "./types";
-import { mapRawStatusToUiState } from "./poller";
+import { mapRawStatusToUiState, STATUS_NAMES } from "./poller";
 import { createReadClient } from "../genlayer/client";
 import { DEFAULT_NETWORK } from "../genlayer/contracts";
 
@@ -50,7 +50,8 @@ export async function runCleanup(): Promise<void> {
           retries: 1,
           interval: 1000,
         });
-        const rawStatus = (receipt.statusName ?? "UNINITIALIZED") as TxRawStatus;
+        const statusNum = typeof receipt.status === "number" ? receipt.status : Number(receipt.status ?? 0);
+        const rawStatus = (STATUS_NAMES[statusNum] ?? "UNINITIALIZED") as TxRawStatus;
         const uiState = mapRawStatusToUiState(rawStatus);
         if (rawStatus !== tx.rawStatus) {
           useTxStore.getState().updateTx(tx.txHash, {
