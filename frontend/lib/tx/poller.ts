@@ -40,6 +40,33 @@ import { DEFAULT_NETWORK } from "../genlayer/contracts";
  * The 14 protocol states collapse into 4 visible buckets. See
  * docs/TX_LIFECYCLE.md for the full mapping rationale.
  */
+/**
+ * Local mapping from the numeric `status` field in receipts to the
+ * GenLayer protocol state names. The SDK declares
+ * `transactionsStatusNumberToName` but does not re-export it from the
+ * package index, and `receipt.statusName` arrives undefined in practice
+ * even though the SDK source claims to populate it. Maintaining this
+ * array locally keeps the poller robust to SDK shape changes.
+ *
+ * Index order matches the TransactionStatus enum in the SDK.
+ */
+export const STATUS_NAMES: TxRawStatus[] = [
+  "UNINITIALIZED",
+  "PENDING",
+  "PROPOSING",
+  "COMMITTING",
+  "REVEALING",
+  "ACCEPTED",
+  "UNDETERMINED",
+  "FINALIZED",
+  "CANCELED",
+  "APPEAL_REVEALING",
+  "APPEAL_COMMITTING",
+  "READY_TO_FINALIZE",
+  "VALIDATORS_TIMEOUT",
+  "LEADER_TIMEOUT",
+];
+
 export function mapRawStatusToUiState(status: TxRawStatus): TxUiState {
   switch (status) {
     case "UNINITIALIZED":
@@ -83,7 +110,9 @@ async function pollOne(txHash: string): Promise<void> {
       interval: 1000,
     });
 
-    const rawStatus = (receipt.statusName ?? "UNINITIALIZED") as TxRawStatus;
+    
+    const statusNum = typeof receipt.status === "number" ? receipt.status : Number(receipt.status ?? 0);
+    const rawStatus = (STATUS_NAMES[statusNum] ?? "UNINITIALIZED") as TxRawStatus;
     const uiState = mapRawStatusToUiState(rawStatus);
 
     store.updateTx(txHash, {

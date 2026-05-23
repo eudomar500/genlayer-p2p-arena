@@ -7,6 +7,8 @@ import { formatGenBalance } from "@/lib/wallet/format";
 import TradeTable from "@/components/marketplace/TradeTable";
 import TradeFilters from "@/components/marketplace/TradeFilters";
 
+import CreateListingButton from "@/components/marketplace/CreateListingButton";
+
 const PAGE_SIZE = 25;
 
 export default function MarketplacePage() {
@@ -30,13 +32,18 @@ export default function MarketplacePage() {
   
   return (
     <main className="pt-24 pb-16 px-6 md:px-12 max-w-7xl mx-auto">
-      <header className="mb-10">
-        <h1 className="text-4xl md:text-5xl font-medium text-[var(--text-primary)] mb-3">
-          Marketplace
-        </h1>
-        <p className="text-[var(--text-secondary)] max-w-2xl">
-          Trustless P2P trades on GenLayer. All trades settle on-chain with optional LLM-arbitrated disputes.
-        </p>
+      <header className="mb-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-medium text-[var(--text-primary)] mb-3">
+            Marketplace
+          </h1>
+          <p className="text-[var(--text-secondary)] max-w-2xl">
+            Trustless P2P trades on GenLayer. All trades settle on-chain with optional LLM-arbitrated disputes.
+          </p>
+        </div>
+        <div className="flex-shrink-0">
+          <CreateListingButton />
+        </div>
       </header>
       
       {/* Stats row */}
