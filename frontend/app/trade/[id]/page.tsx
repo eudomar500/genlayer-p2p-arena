@@ -7,6 +7,7 @@ import { useTrade } from "@/lib/hooks/useTrade";
 import { formatGenBalance } from "@/lib/wallet/format";
 import StateBadge from "@/components/marketplace/StateBadge";
 import TradeTimeline from "@/components/marketplace/TradeTimeline";
+import TradeActionsPanel from "@/components/marketplace/TradeActionsPanel";
 import TradePartiesCard from "@/components/marketplace/TradePartiesCard";
 
 export default function TradeDetailPage() {
@@ -116,6 +117,8 @@ function TradeDetailContent({ tradeId }: { tradeId: number }) {
             </div>
             <TradeTimeline trade={trade} />
           </div>
+
+          <TradeActionsPanel trade={trade} />
         </div>
       </div>
     </main>

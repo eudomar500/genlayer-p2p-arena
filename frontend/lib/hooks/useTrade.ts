@@ -1,14 +1,27 @@
 "use client";
-
 import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_NETWORK } from "@/lib/genlayer/contracts";
 import { getTradeSummary, getListingDetails } from "@/lib/genlayer/reads";
 import { createReadClient } from "@/lib/genlayer/client";
 
+export interface TradeDetail {
+  id: number;
+  title: string;
+  description: string;
+  seller: string;
+  buyer: string;
+  price: bigint;
+  state: number;
+  shipped_at: number;
+  disputed: boolean;
+  llm_verdict_buyer_wins: boolean;
+  llm_verdict_reasoning: string;
+}
+
 export function useTrade(tradeId: number) {
-  return useQuery({
+  return useQuery<TradeDetail>({
     queryKey: ["marketplace", "trade", tradeId],
-    queryFn: async () => {
+    queryFn: async (): Promise<TradeDetail> => {
       const client = createReadClient(DEFAULT_NETWORK);
       const [listing, summary] = await Promise.all([
         getListingDetails(client, DEFAULT_NETWORK, tradeId),
