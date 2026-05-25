@@ -4,14 +4,166 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This repository hosts two contracts versioned independently:
 
-- `contracts/Marketplace.py`: current version `1.4.4`
-- `contracts/PredictionMarket.py`: current version `1.0.4`
+- `contracts/Marketplace.py`: current version `1.4.7`
+- `contracts/PredictionMarket.py`: current version `1.1.5`
 
-Each version entry lists the contracts whose source changed in that entry. Documentation, scripts, and tests are tracked separately under each version.
+Each version entry lists the contracts whose source changed in that entry. Frontend changes are tracked under dated phase entries below. Documentation, scripts, and tests are tracked separately under each version.
 
 ## [Unreleased]
 
-End-to-end Studionet validation completed on May 17, 2026. Two prediction markets resolved via LLM consensus. Full evidence in `docs/DEMO_RESULTS.md`. Next milestone: restore production timing constants in v1.1.0 in preparation for mainnet.
+Phase F (write integration on Bradbury) in progress. The Marketplace happy path is covered end-to-end with five writes integrated and validated in vivo: `create_listing`, `cancel_listing`, `accept_listing`, `mark_shipped`, `confirm_delivery`.
+
+20 writes remain pending in the frontend: 7 disputes and claims, 6 PredictionMarket, 6 admin. Next milestone: extend the `TradeActionsPanel` pattern to cover the disputes block. Validation of disputes is blocked by production timing constants on the live v1.4.7 contract; a demo deployment with reduced timing constants is planned.
+
+## [Frontend Phase F continued] (2026-05-25)
+
+### PR #16: `confirm_delivery` write flow
+
+Buyer-side delivery confirmation that closes the trade and releases the escrow. The contract enforces `msg.sender == buyer` and state `SHIPPED`. `ConfirmDeliveryButton` surfaces the releasing amount and warns the action is final. `TradeActionsPanel` gains `canConfirm`. With four actions in the panel, the role and state matrix is fully exercised. Validated on Bradbury with trade #2.
+
+### PR #15: `mark_shipped` write flow plus per-trade busy state
+
+Seller-side shipping step with `carrier` and `tracking` text fields. Contract enforces length bounds (carrier 1-50, tracking 4-100) mirrored client-side. First action with a true form rather than a confirmation modal. Adds a double-submit guard: while any tracked transaction for a trade is in flight, every action button on its panel renders disabled. The store gains a `selectActiveByContext` selector consumed via `useMemo` to avoid the Zustand infinite-loop warning.
+
+### PR #14: `accept_listing` write flow with role-aware actions
+
+Buyer side of the marketplace primary flow. Payable call: `accept_listing` takes `trade_id` and the contract enforces `msg.value == trade.price`. `AcceptListingButton` hides for the seller. Modal surfaces the trade title and the exact GEN amount before signing. `TradeActionsPanel` now hosts two actions side by side via `canCancel` and `canAccept` flags. Validated on Bradbury with two wallets: seller saw only Cancel; a fresh buyer saw only Buy now with the price inline.
+
+## [Frontend Phase F - Actions panel pattern] (2026-05-24)
+
+### PR #13: `cancel_listing` write flow with actions panel
+
+Establishes the pattern for the remaining 22 writes. `TradeActionsPanel` attaches to the right column of `/trade/[id]` and collapses to null when no action applies for the connected wallet and state. `useCancelListing` wraps `useWriteWithTracking`. Preconditions duplicated in the UI to avoid wasted transactions that would revert on chain. Confirm modal rendered via `createPortal` to sidestep Lenis smooth-scroll interference with `position: fixed`. `useTrade` gains a `TradeDetail` export for downstream action components.
+
+## [Frontend Phase F - TX tracking system] (2026-05-23)
+
+### PR #12: chore drop executable bit from TX_LIFECYCLE.md
+
+Mode-only change. The bit was inherited from the source filesystem on initial commit and had no functional effect.
+
+### PR #11: docs TX lifecycle and tracking system
+
+Documents the system added in PR #8: mapping between GenLayer protocol states and the four UI states, the eight modules under `lib/tx` and `components/tx`, the end-to-end flow, and the pattern for replicating write integrations. Captures Bradbury-specific quirks: the ~25 minute Finality Window, public RPC throttling on concurrent `gen_call`, the SDK `statusName` field undefined at runtime, and the explorer URL convention.
+
+### PR #10: fix tolerate Bradbury RPC rate limit when loading trades
+
+The marketplace list was empty whenever the public Bradbury RPC throttled a `gen_call` request. The hook fired all listing and trade summary reads in parallel through `Promise.all`. Three changes make the read path resilient: sequential reads with a 250 ms gap, `withRateLimitRetry` with backoff (1s, 2s, 3s) on `LimitExceededRpcError`, and failure isolation (`fetchTradeBundle` returns `TradeListItem | null`, queryFn filters nulls).
+
+### PR #9: `create_listing` write flow with tracking integration
+
+First interactive write path on the marketplace. `lib/tx/useWriteWithTracking.ts` is the generic hook used by all 24 writes: verifies wallet and `chainId`, builds the write client, runs the write, and registers the resulting tx hash with the tracking store. `CreateListingDialog` validates title (1-100), description (1-500), price (0 to 1000 GEN) client-side. SDK quirk fix: `genlayer-js` declares `statusName` on receipts but does not populate it consistently. Code now reads `receipt.status` (numeric) and maps it through a local `STATUS_NAMES` array indexed by the `TransactionStatus` enum order. `TxProgressBar` fix: all three steps render as done at `finalized`.
+
+### PR #8: transaction tracking for GenLayer Finality Window
+
+GenLayer transactions stay in `ACCEPTED` for roughly 25 minutes on Bradbury while the appeal window runs, then settle to `FINALIZED`. The UI surfaces this lifecycle so users can submit a write, navigate away, and still see the progress. Architecture is 8 modules. `lib/tx/store.ts` is a Zustand store with `persist` to localStorage under `pointmarket-pending-txs`. `lib/tx/poller.ts` runs every 30 s, reconciles all active TXs in parallel via `waitForTransactionReceipt` with `retries: 1`. `mapRawStatusToUiState` collapses 14 protocol states into 4 UI states. `lib/tx/cleanup.ts` runs once at app load, drops TXs older than 2 hours, reconciles surviving active TXs against the RPC. `components/tx/TxRuntime.tsx` is mounted at the layout root and fires sonner toasts on terminal transitions. `QueryProvider` adjustments: `staleTime` 60s to 5 min, retry 1 to 3 with exponential backoff (1s, 2s, 4s, max 10s), `gcTime` 10 min.
+
+## [Frontend Phase F - Bradbury wiring] (2026-05-21)
+
+### PR #7: wire hooks and UI to active network (Bradbury)
+
+Replaces hardcoded `studionet` references with dynamic `DEFAULT_NETWORK` lookups across `useAllTrades`, `useMarketplaceMetrics`, `useProfileStats`, `useTrade`, `lib/wallet/balance.ts`, `lib/wallet/format.ts`, and `NetworkSwitchBanner`. Fixes a bug where marketplace and profile views read from Studionet after `DEFAULT_NETWORK` was changed to `testnetBradbury`.
+
+### PR #6: point at Bradbury LIVE deployment
+
+Network metadata and contract addresses updated for Testnet Bradbury. `testnetBradbury` `chainId` 4222 to 4221 (verified via `genlayer network info`). RPC `testnet-bradbury.genlayer.com/api` to `rpc-bradbury.genlayer.com`. Explorer `explorer.genlayer.com` to `explorer-bradbury.genlayer.com`. Status planned to active. Addresses populated with deployed Marketplace v1.4.7 and PredictionMarket v1.1.5. `DEFAULT_NETWORK` `studionet` to `testnetBradbury`. PR note: Bradbury and Asimov share chainId 4221 but use independent RPC endpoints and consensus contracts.
+
+## [Bradbury migration] (2026-05-21)
+
+The primary deployment target moved from GenLayer Studionet (Chain 61999) to GenLayer Testnet Bradbury (Chain 4221). Studionet addresses in earlier entries remain archival. Live addresses for the project live in `frontend/lib/genlayer/contracts.ts` under the `testnetBradbury` key. Deployments to Bradbury were performed manually with the `genlayer` CLI. No deploy script was committed for these deployments.
+
+### PR #5: contracts Marketplace v1.4.7 and PredictionMarket v1.1.5 mainnet-ready
+
+Mainnet-ready contracts merged to main via the `feat/contracts-bradbury-v1.4.7` branch. Detail below.
+
+## [v1.4.7 / PM v1.1.5] (2026-05-21)
+
+### Marketplace 1.4.7: Mainnet-ready hardening
+
+Hardening pass for production deployment. Storage layout is not upgrade-compatible with prior versions; mainnet must be a fresh deploy.
+
+Two-step ownership transitions:
+
+- `transfer_admin` stages a `pending_admin`. The new admin must call `accept_admin` to claim the role. Admin can call `cancel_pending_admin` to revert before acceptance.
+- `set_authorized_fee_sender` stages a `pending_fee_sender`. The new fee sender must call `accept_fee_sender` to claim the role. Admin can call `cancel_pending_fee_sender` or `clear_authorized_fee_sender` for cleanup paths.
+
+Upgrade timelock:
+
+- New constant `UPGRADE_TIMELOCK_SECONDS = u64(48 * 60 * 60)`.
+- `upgrade` replaced by `propose_upgrade`, `execute_upgrade`, and `cancel_pending_upgrade`. `propose_upgrade` stores the new code in `pending_upgrade_code` and sets `upgrade_unlock_at = now + UPGRADE_TIMELOCK_SECONDS`. `execute_upgrade` can only be called by admin once the timelock has passed.
+
+Hardening fixes:
+
+- L1: `receive_fee` now checks pause state.
+- L2: `dispute_initiator` is initialized to `_ZERO_ADDRESS` instead of the seller placeholder.
+- `get_contract_info` exposes `pending_fee_sender`, `pending_admin`, `upgrade_unlock_at`, and `has_pending_upgrade`.
+
+Address parameter cleanup:
+
+- `set_authorized_fee_sender`, `transfer_admin`, `withdraw_fees`, and `withdraw_external_fees` accept `Address` directly. Inline `Address(input)` conversion at the boundary was removed.
+
+Eligible trades index fixes (described in the commit message as "from prior audit v146"):
+
+- `_payout_dispute_seller_wins` appends to `eligible_trades`.
+- `_payout_dispute_default` seller-wins branch appends to `eligible_trades`.
+- `get_volume_in_window`, `get_dispute_rate_in_window_bps`, and `get_avg_price_in_window` apply the same `first_seen` eligibility filter as `get_eligible_trade_count_in_window`.
+
+Marketplace deploy:
+
+| Field | Value |
+|---|---|
+| Network | Testnet Bradbury (Chain 4221) |
+| Address | `0x68546F0a8d2Af91d5917A03245c1D31296487b3F` |
+| Admin | `0xF27E3A6d7Bf4BfC0A837020FD74E73055aF17D53` |
+| `authorized_fee_sender` | `0x10717D9814Ace2098862299C26806a2899eAB204` |
+| CONTRACT_VERSION | `u16(147)` |
+
+Versions v1.4.5 and v1.4.6 are referenced in the v1.4.7 commit message ("from prior audit v146") but were not preserved as separate git commits. The cumulative changes from v1.4.4 to v1.4.7 are visible in commit `ea5e96e`.
+
+### PredictionMarket 1.1.5: Mainnet-ready hardening and handshake completion
+
+H1 fix: `_finalize_resolution` pre-validates Marketplace fee setup before emitting fee transfer. Reads `marketplace.get_contract_info()` and refunds the market if the read failed, if PM is not authorized as fee sender, or if Marketplace is paused.
+
+H2 fix: `_resolve_subjective` filters to `STATE_COMPLETED` only. `REFUNDED` trades no longer feed into the LLM resolver, which avoids misleading verdicts on never-delivered goods.
+
+C1 fix: new public method `accept_marketplace_fee_authorization` closes the 2-step `set_authorized_fee_sender` handshake on the Marketplace side. Without it, the Marketplace 2-step would never complete because PM as a contract cannot sign `accept_fee_sender` from its own address. `MarketplaceIface.Write` extended to declare `accept_fee_sender`.
+
+Hardening matching Marketplace:
+
+- 2-step `transfer_admin` with `accept_admin` and `cancel_pending_admin`.
+- 48h upgrade timelock with `propose_upgrade`, `execute_upgrade`, `cancel_pending_upgrade`.
+- L3: `MAX_TRADES_TO_SCAN` reduced from 200 to 100 to keep `_resolve_seller_trustworthy` within reasonable gas bounds.
+
+Storage layout note: v1.1.5 is not upgrade-compatible with previous versions.
+
+PredictionMarket deploy:
+
+| Field | Value |
+|---|---|
+| Network | Testnet Bradbury (Chain 4221) |
+| Address | `0x10717D9814Ace2098862299C26806a2899eAB204` |
+| Admin | `0xF27E3A6d7Bf4BfC0A837020FD74E73055aF17D53` |
+| `marketplace_address` | `0x68546F0a8d2Af91d5917A03245c1D31296487b3F` |
+| CONTRACT_VERSION | `u16(115)` |
+
+PM versions v1.0.5 through v1.1.4 were not preserved as separate git commits. The cumulative changes from v1.0.4 to v1.1.5 are visible in commit `fb44882`.
+
+## [Frontend Phase 3] (2026-05-19)
+
+### PR #4: read-only marketplace UI
+
+Public marketplace listing and trade detail pages. Read-only. `/marketplace` shows aggregate stats and a dense table with search, state filter, and pagination (25 per page). `/trade/[id]` shows full detail with parties card, state badge, price, and a visual timeline. Dispute-resolved trades show the LLM verdict with reasoning. Components added: `StateBadge`, `TradeFilters`, `TradeTable`, `TradeTimeline`, `TradePartiesCard`. Data layer: `useMarketplaceMetrics`, `useAllTrades` (iterates trades client-side as a deliberate MVP approach; TODO marks the indexer migration for phase 7), `useTrade`.
+
+## [Frontend Phase 2] (2026-05-19)
+
+### PR #3: wallet connection and public profile drawer
+
+EIP-6963 multi-wallet discovery, account state via Zustand, public profile drawer reading on-chain data via `genlayer-js` v1.2. Components: `ConnectWalletModal` (renders detected EIP-6963 providers with Rabby pinned via a Recommended badge, rendered through React Portal to escape `LenisProvider`), `AccountMenu`, `Identicon` (`boring-avatars` beam variant), `NetworkSwitchBanner`, `ProfileContent`. Routing uses Next.js parallel and intercepting routes: `/profile` redirects to `/u/[connected-address]`, `app/@profile/(.)u/[address]` intercepts navigation to render the profile as a slide-in drawer. SDK upgrade: `genlayer-js` 0.7.0 to 1.2.0. v0.7 did not export `studionet` as a first-class chain and routed RPC calls through simulator-specific methods that returned empty data on Studionet. Dependencies added: `zustand`, `boring-avatars`.
+
+## [Frontend Phase 1] (2026-05-18 to 2026-05-21)
+
+### PR #2: brand and landing page
+
+Brand identity, landing page, and visual polish. Commits: `9f9cd18` (brand and landing) and `ecd88d5` (wordmark dot alignment, footer copy, hydration fix). No contract changes.
 
 ## [PM v1.0.4] (2026-05-17)
 
