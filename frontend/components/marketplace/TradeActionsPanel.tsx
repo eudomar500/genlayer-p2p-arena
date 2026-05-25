@@ -1,10 +1,11 @@
 "use client";
+import { useMemo } from "react";
 import { useWalletStore } from "@/lib/wallet/store";
 import { useTxStore } from "@/lib/tx/store";
-import { useMemo } from "react";
 import CancelListingButton from "./CancelListingButton";
 import AcceptListingButton from "./AcceptListingButton";
 import MarkShippedDialog from "./MarkShippedDialog";
+import ConfirmDeliveryButton from "./ConfirmDeliveryButton";
 import type { TradeDetail } from "@/lib/hooks/useTrade";
 
 interface TradeActionsPanelProps {
@@ -15,9 +16,7 @@ interface TradeActionsPanelProps {
  * Aggregates write actions available on a trade for the connected
  * wallet. Each child button still decides whether to render itself,
  * but this wrapper checks the same conditions upfront so the panel
- * collapses to null when no action is applicable. Future actions
- * (confirm_delivery, open_dispute, etc.) get added by extending
- * hasAnyAction with another canX flag.
+ * collapses to null when no action is applicable.
  *
  * The panel also subscribes to the TX store for any in-flight write
  * targeting this trade. While such a TX exists (submitted or accepted
@@ -47,14 +46,17 @@ export default function TradeActionsPanel({ trade }: TradeActionsPanelProps) {
   if (!connected) return null;
 
   const isSeller = address.toLowerCase() === trade.seller.toLowerCase();
+  const isBuyer = address.toLowerCase() === trade.buyer.toLowerCase();
   const isOpen = trade.state === 0;
   const isPaid = trade.state === 1;
+  const isShipped = trade.state === 2;
 
   const canCancel = isSeller && isOpen;
   const canAccept = !isSeller && isOpen;
   const canShip = isSeller && isPaid;
+  const canConfirm = isBuyer && isShipped;
 
-  const hasAnyAction = canCancel || canAccept || canShip;
+  const hasAnyAction = canCancel || canAccept || canShip || canConfirm;
   if (!hasAnyAction) return null;
 
   return (
@@ -76,6 +78,15 @@ export default function TradeActionsPanel({ trade }: TradeActionsPanelProps) {
           tradeId={trade.id}
           seller={trade.seller}
           state={trade.state}
+          disabled={hasActiveTx}
+          activeMethod={activeMethod}
+        />
+        <ConfirmDeliveryButton
+          tradeId={trade.id}
+          buyer={trade.buyer}
+          state={trade.state}
+          price={trade.price}
+          title={trade.title}
           disabled={hasActiveTx}
           activeMethod={activeMethod}
         />
