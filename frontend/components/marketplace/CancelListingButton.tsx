@@ -12,9 +12,11 @@ interface CancelListingButtonProps {
   tradeId: number;
   seller: string;
   state: number;
+  disabled?: boolean;
+  activeMethod?: string | null;
 }
 
-export default function CancelListingButton({ tradeId, seller, state }: CancelListingButtonProps) {
+export default function CancelListingButton({ tradeId, seller, state, disabled, activeMethod }: CancelListingButtonProps) {
   const { address, status } = useWalletStore();
   const { cancelListing, pending } = useCancelListing();
   const [open, setOpen] = useState(false);
@@ -137,9 +139,10 @@ export default function CancelListingButton({ tradeId, seller, state }: CancelLi
     <div>
       <button
         onClick={() => setOpen(true)}
-        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-subtle)] bg-transparent text-[var(--text-primary)] font-medium hover:bg-[var(--bg-elevated-2)] transition-colors"
+        disabled={disabled}
+        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-subtle)] bg-transparent text-[var(--text-primary)] font-medium hover:bg-[var(--bg-elevated-2)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Cancel listing
+        {disabled && activeMethod ? `Processing ${activeMethod.replace(/_/g, " ")}...` : "Cancel listing"}
       </button>
       {open && typeof window !== "undefined" ? createPortal(modalContent, document.body) : null}
     </div>
