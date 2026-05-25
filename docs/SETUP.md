@@ -11,7 +11,7 @@ If you received this codebase as a folder (not as a clone), do this first.
 1. Go to https://github.com/new
 2. Repository name: `genlayer-p2p-arena` (or your preferred name)
 3. Set to **Private**
-4. **Do not** initialize with README, .gitignore, or LICENSE — we already have those
+4. **Do not** initialize with README, .gitignore, or LICENSE -- we already have those
 5. Click "Create repository"
 
 GitHub will show you the empty repo URL, something like:
@@ -85,7 +85,7 @@ cp .env.example .env
 # Edit .env and set GENLAYER_NETWORK=localnet (the default)
 ```
 
-For local development on Studio, you don't need a private key — the built-in faucet provides funded accounts.
+For local development on Studio, you don't need a private key -- the built-in faucet provides funded accounts.
 
 ### 2.4 Start GenLayer Studio
 
@@ -135,14 +135,14 @@ git push
 
 ## Troubleshooting
 
-**`pnpm: command not found`** → `npm install -g pnpm`
+**`pnpm: command not found`** -> `npm install -g pnpm`
 
-**`task: command not found`** → Install Task from https://taskfile.dev/installation/
+**`task: command not found`** -> Install Task from https://taskfile.dev/installation/
 
-**`genlayer: command not found`** → `task setup:genlayer` or manually `npm install -g genlayer`
+**`genlayer: command not found`** -> `task setup:genlayer` or manually `npm install -g genlayer`
 
-**Studio won't start** → Make sure Docker is running. Try `task studio:reset` to wipe state.
+**Studio won't start** -> Make sure Docker is running. Try `task studio:reset` to wipe state.
 
-**Tests fail with `ModuleNotFoundError: genlayer`** → Run `task setup:python`. If that fails, check your Python version is ≥3.11 with `python3 --version`.
+**Tests fail with `ModuleNotFoundError: genlayer`** -> Run `task setup:python`. If that fails, check your Python version is ≥3.11 with `python3 --version`.
 
-**Integration tests timeout** → LLM inference is slow. Increase test timeout in `pytest.ini` or run individual tests with `pytest tests/integration/test_x.py -v --timeout 300`.
+**Integration tests timeout** -> LLM inference is slow. Increase test timeout in `pytest.ini` or run individual tests with `pytest tests/integration/test_x.py -v --timeout 300`.

@@ -33,14 +33,14 @@ The security tests are the ones that earn this repo the right to claim "designed
 
 | Test file | Threats covered (see [SECURITY.md](../docs/SECURITY.md)) |
 |-----------|---------------------------------------------------------|
-| `test_trade_state_machine.py` | T2 — every (state, action) pair |
-| `test_trade_access_control.py` | T3 — sender_address impersonation |
-| `test_trade_reentrancy.py` | T1 — payout path re-entry |
-| `test_trade_prompt_injection.py` | T5 — known injection patterns + LLM resistance |
-| `test_trade_overflow.py` | T6 — u256 boundary fuzzing |
-| `test_factory_callback_auth.py` | T4 — fake Trade impersonation |
-| `test_prediction_wash_economics.py` | T8 — wash trading break-even simulation |
-| `test_prediction_settlement_timing.py` | T9 — settlement window race |
+| `test_trade_state_machine.py` | T2 -- every (state, action) pair |
+| `test_trade_access_control.py` | T3 -- sender_address impersonation |
+| `test_trade_reentrancy.py` | T1 -- payout path re-entry |
+| `test_trade_prompt_injection.py` | T5 -- known injection patterns + LLM resistance |
+| `test_trade_overflow.py` | T6 -- u256 boundary fuzzing |
+| `test_factory_callback_auth.py` | T4 -- fake Trade impersonation |
+| `test_prediction_wash_economics.py` | T8 -- wash trading break-even simulation |
+| `test_prediction_settlement_timing.py` | T9 -- settlement window race |
 
 ## How to run
 

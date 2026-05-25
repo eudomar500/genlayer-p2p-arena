@@ -4,13 +4,13 @@
 
 ## Vision
 
-Replicate the user experience of Binance P2P fiat on/off ramps — buy/sell crypto with bank transfers, mobile money, or cash — but with the trust model decentralized. Instead of Binance arbitrating disputes between two strangers wiring fiat, GenLayer's validator quorum reads payment evidence and adjudicates.
+Replicate the user experience of Binance P2P fiat on/off ramps -- buy/sell crypto with bank transfers, mobile money, or cash -- but with the trust model decentralized. Instead of Binance arbitrating disputes between two strangers wiring fiat, GenLayer's validator quorum reads payment evidence and adjudicates.
 
 This is the natural extension of the v1 escrow primitive from physical goods to fiat-for-crypto trades.
 
 ## Why this is interesting
 
-**Binance P2P moves billions monthly in LATAM alone.** In Venezuela, it is the dominant on-ramp — more reliable than any local bank, more accessible than centralized exchanges. The product-market fit is established. What is missing is the trust-minimized version.
+**Binance P2P moves billions monthly in LATAM alone.** In Venezuela, it is the dominant on-ramp -- more reliable than any local bank, more accessible than centralized exchanges. The product-market fit is established. What is missing is the trust-minimized version.
 
 **The gap competitors have not closed.** [LocalCryptos](https://localcryptos.com) (shut down), [Bisq](https://bisq.network), [HodlHodl](https://hodlhodl.com), and a handful of others have tried decentralized fiat escrow. All hit the same wall: dispute resolution requires a human arbiter (centralized) or a complex slow-moving DAO (Kleros-style, expensive and slow). GenLayer eliminates this wall.
 
@@ -73,7 +73,7 @@ Modern image editing makes a believable forged bank screenshot trivial. The LLM 
 
 **Mitigation paths:**
 - **Multi-source verification.** Cross-reference the receipt against a public bank API where available (some LATAM banks expose verification endpoints).
-- **Cryptographic receipts.** Push banks/wallets to issue signed digital receipts. This requires bank cooperation — slow but high-value.
+- **Cryptographic receipts.** Push banks/wallets to issue signed digital receipts. This requires bank cooperation -- slow but high-value.
 - **Behavioral analysis.** A reputation system layered on top: serial submitters of forged receipts pattern-match over time even if each individual submission is hard to detect.
 
 ### 2. Legal exposure
@@ -82,7 +82,7 @@ Fiat-to-crypto exchange is regulated in every jurisdiction. Even a decentralized
 
 - **Geoblocking via IP detection in the frontend** (does not protect against determined users, but reduces incidental exposure).
 - **No KYC at the protocol level**, KYC handled by users via established off-ramps. The protocol is plumbing, not a financial institution.
-- **Operate as a public good with no centralized monetization** — fees go to the validator set, not a foundation or operator. Reduces "this is a money transmitter" arguments.
+- **Operate as a public good with no centralized monetization** -- fees go to the validator set, not a foundation or operator. Reduces "this is a money transmitter" arguments.
 
 This is the area where serious legal consultation is required before deploying to mainnet with real users.
 
@@ -106,7 +106,7 @@ The bridge between v1 (physical goods) and v3 (fiat escrow) is **digital goods**
 
 ## Why this matters for the v1 pitch
 
-v1 stands on its own technically, but **v3 is the long-term thesis**. When pitching v1 to GenLayer Foundation or hackathon judges, the fiat escrow roadmap is the answer to "what's the long game?" — and it is a credible answer because:
+v1 stands on its own technically, but **v3 is the long-term thesis**. When pitching v1 to GenLayer Foundation or hackathon judges, the fiat escrow roadmap is the answer to "what's the long game?" -- and it is a credible answer because:
 
 1. The market is real and large (LATAM P2P fiat ≥ $30B/year).
 2. The trust gap is real and centrally arbitrated today.
