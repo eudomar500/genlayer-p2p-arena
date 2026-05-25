@@ -29,5 +29,5 @@ task demo:prediction              # prediction market demo
 Each demo script exercises a different code path and tells a different story for the hackathon pitch:
 
 - **Happy path** demonstrates that the protocol is fast and cheap when both parties cooperate. No LLM, fast finalization, minimal fees.
-- **Dispute demo** is the *interesting* one for GenLayer — it shows the AI validator quorum doing actual adjudication. This is the visual moment in the pitch.
+- **Dispute demo** is the *interesting* one for GenLayer -- it shows the AI validator quorum doing actual adjudication. This is the visual moment in the pitch.
 - **Prediction market demo** demonstrates the meta-layer: a second use case for the same data, with self-settlement and no oracles.
