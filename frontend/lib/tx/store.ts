@@ -108,3 +108,24 @@ export function selectTxByHash(
 ): PendingTx | undefined {
   return state.txs.find((t) => t.txHash === txHash);
 }
+
+/**
+ * Returns the TXs currently in flight (submitted or accepted, not yet
+ * finalized or failed) whose context exactly matches the provided
+ * string. Used by per-trade action buttons to disable themselves while
+ * a write for the same trade is being processed, preventing
+ * accidental duplicate submissions during the Bradbury Finality
+ * Window. Context strings are produced by useWriteWithTracking with
+ * the convention "Trade #N".
+ */
+export function selectActiveByContext(
+  state: TxStoreState,
+  context: string,
+): PendingTx[] {
+  return state.txs.filter(
+    (t) =>
+      t.context === context &&
+      t.uiState !== "finalized" &&
+      t.uiState !== "failed",
+  );
+}
