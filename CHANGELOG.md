@@ -15,6 +15,47 @@ Phase F (write integration on Bradbury) in progress. The Marketplace happy path 
 
 20 writes remain pending in the frontend: 7 disputes and claims, 6 PredictionMarket, 6 admin. Next milestone: extend the `TradeActionsPanel` pattern to cover the disputes block. Validation of disputes is blocked by production timing constants on the live v1.4.7 contract; a demo deployment with reduced timing constants is planned.
 
+## [Demo contracts] (2026-05-26)
+
+### MarketplaceDemo.py and PredictionMarketDemo.py
+
+Parallel demo variants of the production contracts (`Marketplace.py` and `PredictionMarket.py`). Created to enable rapid end-to-end validation of dispute and prediction flows on Bradbury without waiting for production timing windows (7 to 90 days for Marketplace, 30 min to 24h for PredictionMarket).
+
+Originals untouched. Logic, storage layout, function signatures, decorators, types, and structure identical between each pair. Only timing constants and `CONTRACT_VERSION` differ.
+
+### MarketplaceDemo.py
+
+Reserved demo version `u16(900)`. Timing reductions:
+
+| Constant | Production | Demo |
+|---|---|---|
+| `UPGRADE_TIMELOCK_SECONDS` | 48h | 5 min |
+| `DISPUTE_WINDOW_SECONDS` | 7 days | 5 min |
+| `DISPUTE_RESPONSE_WINDOW_SECONDS` | 14 days | 5 min |
+| `ELIGIBILITY_PERIOD_SECONDS` | 7 days | 5 min |
+| `MAX_SHIPPING_DELAY_SECONDS` | 30 days | 5 min |
+| `ADMIN_FORCE_REFUND_DELAY_SECONDS` | 30 days | 10 min |
+| `PUBLIC_FORCE_REFUND_DELAY_SECONDS` | 90 days | 15 min |
+
+Cascade preserved: dispute window < response window < admin force refund < public force refund.
+
+### PredictionMarketDemo.py
+
+Reserved demo version `u16(901)`. Timing reductions:
+
+| Constant | Bradbury current | Demo |
+|---|---|---|
+| `UPGRADE_TIMELOCK_SECONDS` | 48h | 5 min |
+| `MIN_BETTING_WINDOW_SECONDS` | 30 min | 5 min |
+| `MAX_BETTING_WINDOW_SECONDS` | 24h | 1h |
+| `SETTLEMENT_BUFFER_SECONDS` | 1h | 5 min |
+
+Inline comment block extended to document all timing profiles: production mainnet, Testnet Bradbury current, Studionet demo (legacy), Testnet Bradbury demo.
+
+### Status
+
+Files committed in `feat/contracts-demo-timings`. Not deployed to Bradbury yet. Deployment of demo contracts and frontend integration to support a network switch (production v1.4.7 versus demo v900/v901) tracked as next steps in the disputes validation roadmap.
+
 ## [Frontend Phase F continued] (2026-05-25)
 
 ### PR #16: `confirm_delivery` write flow
