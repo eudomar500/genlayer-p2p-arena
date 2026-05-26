@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-CONTRACT_VERSION = u16(900)
+CONTRACT_VERSION = u16(902)
 
 UPGRADE_TIMELOCK_SECONDS = u64(300)
 
@@ -691,6 +691,10 @@ Respond with a JSON object with exactly these keys:
             "price": str(trade.price),
             "state": int(trade.state),
             "created_at": int(trade.created_at),
+            "tracking_number": str(trade.tracking_number),
+            "tracking_carrier": str(trade.tracking_carrier),
+            "buyer_evidence": str(trade.buyer_evidence),
+            "seller_evidence": str(trade.seller_evidence),
         }
 
     @gl.public.view

@@ -15,6 +15,23 @@ Phase F (write integration on Bradbury) in progress. The Marketplace happy path 
 
 20 writes remain pending in the frontend: 7 disputes and claims, 6 PredictionMarket, 6 admin. Next milestone: extend the `TradeActionsPanel` pattern to cover the disputes block. Validation of disputes is blocked by production timing constants on the live v1.4.7 contract; a demo deployment with reduced timing constants is planned.
 
+## [Demo contracts v902] (2026-05-26)
+
+### MarketplaceDemo.py v902
+
+Expands `get_listing_details` view to include tracking and dispute evidence fields. This unblocks frontend disclosure of:
+
+- Tracking number and carrier as set by the seller in `mark_shipped`.
+- Buyer and seller evidence as submitted in `open_dispute` and `respond_to_dispute`.
+
+`CONTRACT_VERSION` bumped from `u16(900)` to `u16(902)`. No changes to logic, storage layout, function signatures, or other views. The original `Marketplace.py` v1.4.7 remains untouched; the view expansion applies only to the demo variant for now and can be ported to the production contract in a future version with a fresh audit.
+
+`PredictionMarketDemo.py` not modified; its views already expose all `MarketData` fields. Existing handshake from `PredictionMarketDemo v901` to `MarketplaceDemo v900` is left in place (PredictionMarket flows are not affected by this view expansion, and the one-shot `set_marketplace_address` on PM cannot be reassigned without redeploying PM as well).
+
+### Status
+
+Deployed: pending. Frontend address update: pending in the same PR.
+
 ## [Demo contracts] (2026-05-26)
 
 ### MarketplaceDemo.py and PredictionMarketDemo.py
