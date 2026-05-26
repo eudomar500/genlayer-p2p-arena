@@ -82,7 +82,7 @@ export function useProfileStats(address: string) {
               completedTrades++;
               totalVolume += BigInt(trade.price);
             }
-            if (trade.state === 3 || trade.was_disputed) {
+            if (trade.state === 3 || trade.disputed) {
               disputedTrades++;
             }
 

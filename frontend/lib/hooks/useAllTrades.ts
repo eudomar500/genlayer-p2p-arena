@@ -64,7 +64,7 @@ async function fetchTradeBundle(
       price: BigInt(summary.price),
       state: Number(summary.state),
       shipped_at: Number(summary.shipped_at),
-      disputed: Boolean(summary.was_disputed),
+      disputed: Boolean(summary.disputed),
     };
   } catch {
     // After retries, give up on this trade but do not block the others.

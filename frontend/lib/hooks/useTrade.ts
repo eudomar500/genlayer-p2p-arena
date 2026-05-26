@@ -1,4 +1,5 @@
 "use client";
+
 import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_NETWORK } from "@/lib/genlayer/contracts";
 import { getTradeSummary, getListingDetails } from "@/lib/genlayer/reads";
@@ -14,6 +15,10 @@ export interface TradeDetail {
   state: number;
   paid_at: number;
   shipped_at: number;
+  disputed_at: number;
+  dispute_initiator: string;
+  buyer_bond: bigint;
+  seller_bond: bigint;
   disputed: boolean;
   llm_verdict_buyer_wins: boolean;
   llm_verdict_reasoning: string;
@@ -38,9 +43,13 @@ export function useTrade(tradeId: number) {
         state: Number(summary.state),
         paid_at: Number(summary.paid_at),
         shipped_at: Number(summary.shipped_at),
-        disputed: Boolean(summary.was_disputed),
+        disputed_at: Number(summary.disputed_at),
+        dispute_initiator: summary.dispute_initiator,
+        buyer_bond: BigInt(summary.buyer_bond),
+        seller_bond: BigInt(summary.seller_bond),
+        disputed: Boolean(summary.disputed),
         llm_verdict_buyer_wins: Boolean(summary.llm_verdict_buyer_wins),
-        llm_verdict_reasoning: String(listing.llm_resolution_reasoning ?? ""),
+        llm_verdict_reasoning: String(summary.llm_verdict_reasoning ?? ""),
       };
     },
     staleTime: 30_000,
