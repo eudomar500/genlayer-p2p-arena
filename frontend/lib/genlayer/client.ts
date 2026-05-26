@@ -7,6 +7,7 @@ const CHAIN_BY_NETWORK: Record<NetworkKey, any> = {
   studionet: studionet,
   testnetAsimov: testnetAsimov,
   testnetBradbury: testnetBradbury,
+  testnetBradburyDemo: testnetBradbury,
 };
 
 export function createReadClient(network: NetworkKey) {

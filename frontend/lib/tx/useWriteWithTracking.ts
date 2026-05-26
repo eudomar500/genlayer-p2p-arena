@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useWalletStore } from "@/lib/wallet/store";
 import { useTxStore } from "@/lib/tx/store";
 import { createWriteClient, type WriteClient } from "@/lib/genlayer/client";
+import { DEFAULT_NETWORK, type NetworkKey } from "@/lib/genlayer/contracts";
 import type { TxMethod } from "@/lib/tx/types";
 import type { Address } from "@/lib/genlayer/types";
 
 interface ExecuteParams {
   method: TxMethod;
   context?: string;
-  write: (client: WriteClient, network: "testnetBradbury") => Promise<string>;
+  write: (client: WriteClient, network: NetworkKey) => Promise<string>;
 }
 
 export function useWriteWithTracking() {
@@ -31,8 +32,8 @@ export function useWriteWithTracking() {
     setError(null);
 
     try {
-      const client = createWriteClient("testnetBradbury", address as Address);
-      const txHash = await write(client, "testnetBradbury");
+      const client = createWriteClient(DEFAULT_NETWORK, address as Address);
+      const txHash = await write(client, DEFAULT_NETWORK);
       
       addTx({
         txHash,
