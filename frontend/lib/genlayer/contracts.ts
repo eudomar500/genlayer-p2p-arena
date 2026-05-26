@@ -11,7 +11,7 @@ import type { Address } from "./types";
  * which uses Vue + JS, not TS strict).
  */
 
-export type NetworkKey = "studionet" | "testnetAsimov" | "testnetBradbury";
+export type NetworkKey = "studionet" | "testnetAsimov" | "testnetBradbury" | "testnetBradburyDemo";
 
 export interface NetworkAddresses {
   marketplace: Address;
@@ -30,9 +30,14 @@ export const ADDRESSES: Record<NetworkKey, NetworkAddresses | null> = {
     predictionMarket:
       "0x10717D9814Ace2098862299C26806a2899eAB204" as Address,
   },
+  testnetBradburyDemo: {
+    marketplace: "0x42071e9F1d9DD65c8Fbbf1e84AeE5d1A1C58aEdf" as Address,
+    predictionMarket:
+      "0x19A008165570Af40eFc0e1CE2AA95CfBC10335F3" as Address,
+  },
 };
 
-export const DEFAULT_NETWORK: NetworkKey = "testnetBradbury";
+export const DEFAULT_NETWORK: NetworkKey = "testnetBradburyDemo";
 
 /**
  * Returns the contract addresses for a given network. The return type uses

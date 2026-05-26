@@ -39,4 +39,12 @@ export const NETWORKS: Record<NetworkKey, NetworkMetadata> = {
     explorerUrl: "https://explorer-bradbury.genlayer.com",
     status: "active",
   },
+  testnetBradburyDemo: {
+    key: "testnetBradburyDemo",
+    displayName: "Testnet Bradbury Demo",
+    chainId: 4221,
+    rpcUrl: "https://rpc-bradbury.genlayer.com",
+    explorerUrl: "https://explorer-bradbury.genlayer.com",
+    status: "active",
+  },
 };
