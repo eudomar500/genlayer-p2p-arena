@@ -65,34 +65,36 @@ export const ObjectiveMetric = {
 } as const;
 
 export interface TradeSummary {
-  exists: boolean;
-  trade_id: string;
   seller: Address;
   buyer: Address;
   price: string;
+  fee_amount: string;
   state: TradeStateValue;
   created_at: number;
   paid_at: number;
   shipped_at: number;
   delivered_at: number;
   disputed_at: number;
-  resolved_at: number;
-  was_disputed: boolean;
-  llm_verdict_buyer_wins: boolean;
-  resolved_by_default: boolean;
+  disputed: boolean;
+  dispute_initiator: Address;
   buyer_bond: string;
   seller_bond: string;
+  llm_verdict_buyer_wins: boolean;
+  llm_verdict_reasoning: string;
+  resolved_by_default: boolean;
 }
 
 export interface ListingDetails {
-  exists: boolean;
+  seller: Address;
   title: string;
   description: string;
+  price: string;
+  state: TradeStateValue;
+  created_at: number;
   tracking_number: string;
   tracking_carrier: string;
   buyer_evidence: string;
   seller_evidence: string;
-  llm_resolution_reasoning: string;
 }
 
 export interface MarketplaceMetrics {
