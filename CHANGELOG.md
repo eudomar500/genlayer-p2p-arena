@@ -54,7 +54,22 @@ Inline comment block extended to document all timing profiles: production mainne
 
 ### Status
 
-Files committed in `feat/contracts-demo-timings`. Not deployed to Bradbury yet. Deployment of demo contracts and frontend integration to support a network switch (production v1.4.7 versus demo v900/v901) tracked as next steps in the disputes validation roadmap.
+Both contracts deployed to Bradbury and operational. Admin address `0xF27E3A6d7Bf4BfC0A837020FD74E73055aF17D53` for both.
+
+| Contract | Address | Deploy TX |
+|---|---|---|
+| MarketplaceDemo v900 | `0x42071e9F1d9DD65c8Fbbf1e84AeE5d1A1C58aEdf` | `0x0d0291d04f0ef3cf6e822dd772787e4743c7d5b6bb63604cd9705e9938b8aa24` |
+| PredictionMarketDemo v901 | `0x19A008165570Af40eFc0e1CE2AA95CfBC10335F3` | `0xf27944905af5ae80b4355f59cb3c511213f9c5bbe7d86317604a47d69b37c180` |
+
+Handshake to enable PredictionMarketDemo as authorized fee sender on MarketplaceDemo:
+
+| Step | TX | Status |
+|---|---|---|
+| 1. `PM.set_marketplace_address` | `0xf4c9506ae8c1ed94fdb65a2c84ce79677a4dbe1c986562a28cffb73c31288b32` | accepted |
+| 2. `Marketplace.set_authorized_fee_sender` | `0x5eb5e5785d03f316f56461829c750117f88c3c2cfe7d4555c9c83f2d9bf6599d` | accepted |
+| 3. `PM.accept_marketplace_fee_authorization` | pending | -- |
+
+Step 3 pending until step 2 finalizes. Frontend integration to support a network selector between production v1.4.7 and demo v900/v901 tracked as the next milestone.
 
 ## [Frontend Phase F continued] (2026-05-25)
 
