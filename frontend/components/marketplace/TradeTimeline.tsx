@@ -55,6 +55,7 @@ export default function TradeTimeline({ trade }: TradeTimelineProps) {
 function buildSteps(trade: TradeTimelineProps["trade"]) {
   const reached = (minState: number) => trade.state >= minState && trade.state !== TradeState.CANCELLED && trade.state !== TradeState.REFUNDED;
   const isCancelled = trade.state === TradeState.CANCELLED;
+  const isRefunded = trade.state === TradeState.REFUNDED;
   
   const filledIcon = (
     <div className="w-6 h-6 rounded-full bg-[var(--accent-primary)] flex items-center justify-center">
@@ -77,6 +78,8 @@ function buildSteps(trade: TradeTimelineProps["trade"]) {
       <XCircle size={14} className="text-[var(--bg-deep)]" />
     </div>
   );
+
+  const skippedIcon = cancelIcon;
   
   const steps = [
     {
@@ -87,27 +90,31 @@ function buildSteps(trade: TradeTimelineProps["trade"]) {
     },
     {
       title: "Listing accepted",
-      detail: reached(TradeState.PAID) && trade.buyer && trade.buyer !== trade.seller 
+      detail: (reached(TradeState.PAID) || isRefunded) && trade.buyer && trade.buyer !== trade.seller 
         ? `By ${truncateAddress(trade.buyer)}` 
         : undefined,
-      reached: reached(TradeState.PAID) || trade.state === TradeState.REFUNDED,
-      icon: (reached(TradeState.PAID) || trade.state === TradeState.REFUNDED) ? filledIcon : emptyIcon,
+      reached: reached(TradeState.PAID) || isRefunded,
+      icon: (reached(TradeState.PAID) || isRefunded) ? filledIcon : emptyIcon,
     },
     {
       title: "Shipped",
       detail: reached(TradeState.SHIPPED) 
         ? `Tracking provided by seller` 
-        : undefined,
-      reached: reached(TradeState.SHIPPED),
-      icon: reached(TradeState.SHIPPED) ? filledIcon : emptyIcon,
+        : (isRefunded ? "Not shipped within window" : undefined),
+      reached: reached(TradeState.SHIPPED) || isRefunded,
+      icon: reached(TradeState.SHIPPED) 
+        ? filledIcon 
+        : (isRefunded ? skippedIcon : emptyIcon),
     },
     {
       title: "Delivered & paid out",
       detail: trade.state === TradeState.COMPLETED 
         ? "Funds released to seller" 
-        : undefined,
-      reached: trade.state === TradeState.COMPLETED,
-      icon: trade.state === TradeState.COMPLETED ? filledIcon : emptyIcon,
+        : (isRefunded ? "Refund issued instead" : undefined),
+      reached: trade.state === TradeState.COMPLETED || isRefunded,
+      icon: trade.state === TradeState.COMPLETED 
+        ? filledIcon 
+        : (isRefunded ? skippedIcon : emptyIcon),
     },
   ];
   
