@@ -12,6 +12,7 @@ export interface TradeDetail {
   buyer: string;
   price: bigint;
   state: number;
+  paid_at: number;
   shipped_at: number;
   disputed: boolean;
   llm_verdict_buyer_wins: boolean;
@@ -35,6 +36,7 @@ export function useTrade(tradeId: number) {
         buyer: summary.buyer,
         price: BigInt(summary.price),
         state: Number(summary.state),
+        paid_at: Number(summary.paid_at),
         shipped_at: Number(summary.shipped_at),
         disputed: Boolean(summary.was_disputed),
         llm_verdict_buyer_wins: Boolean(summary.llm_verdict_buyer_wins),

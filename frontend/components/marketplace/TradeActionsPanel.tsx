@@ -6,6 +6,8 @@ import CancelListingButton from "./CancelListingButton";
 import AcceptListingButton from "./AcceptListingButton";
 import MarkShippedDialog from "./MarkShippedDialog";
 import ConfirmDeliveryButton from "./ConfirmDeliveryButton";
+import ClaimAfterWindowButton from "./ClaimAfterWindowButton";
+import ClaimUnshippedRefundButton from "./ClaimUnshippedRefundButton";
 import type { TradeDetail } from "@/lib/hooks/useTrade";
 
 interface TradeActionsPanelProps {
@@ -55,8 +57,16 @@ export default function TradeActionsPanel({ trade }: TradeActionsPanelProps) {
   const canAccept = !isSeller && isOpen;
   const canShip = isSeller && isPaid;
   const canConfirm = isBuyer && isShipped;
+  const canClaimAfterWindow = isSeller && isShipped;
+  const canClaimUnshippedRefund = isBuyer && isPaid;
 
-  const hasAnyAction = canCancel || canAccept || canShip || canConfirm;
+  const hasAnyAction =
+    canCancel ||
+    canAccept ||
+    canShip ||
+    canConfirm ||
+    canClaimAfterWindow ||
+    canClaimUnshippedRefund;
   if (!hasAnyAction) return null;
 
   return (
@@ -85,6 +95,26 @@ export default function TradeActionsPanel({ trade }: TradeActionsPanelProps) {
           tradeId={trade.id}
           buyer={trade.buyer}
           state={trade.state}
+          price={trade.price}
+          title={trade.title}
+          disabled={hasActiveTx}
+          activeMethod={activeMethod}
+        />
+        <ClaimAfterWindowButton
+          tradeId={trade.id}
+          seller={trade.seller}
+          state={trade.state}
+          shippedAt={trade.shipped_at}
+          price={trade.price}
+          title={trade.title}
+          disabled={hasActiveTx}
+          activeMethod={activeMethod}
+        />
+        <ClaimUnshippedRefundButton
+          tradeId={trade.id}
+          buyer={trade.buyer}
+          state={trade.state}
+          paidAt={trade.paid_at}
           price={trade.price}
           title={trade.title}
           disabled={hasActiveTx}
