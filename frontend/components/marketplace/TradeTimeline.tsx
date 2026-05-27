@@ -11,6 +11,9 @@ interface TradeTimelineProps {
     buyer: string;
     shipped_at: number;
     disputed: boolean;
+    disputed_at?: number;
+    dispute_initiator?: string;
+    resolved_by_default?: boolean;
     llm_verdict_buyer_wins?: boolean;
     llm_verdict_reasoning?: string;
   };
@@ -118,21 +121,43 @@ function buildSteps(trade: TradeTimelineProps["trade"]) {
     },
   ];
   
-  // Special states
-  if (trade.disputed || trade.state === TradeState.DISPUTED) {
+  // Dispute lifecycle steps
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+  const initiatorSet =
+    trade.dispute_initiator &&
+    trade.dispute_initiator.toLowerCase() !== ZERO_ADDRESS;
+  const initiatorIsBuyer =
+    initiatorSet && trade.dispute_initiator!.toLowerCase() === trade.buyer.toLowerCase();
+  const initiatorLabel = initiatorIsBuyer ? "buyer" : "seller";
+  const isDisputeActive = trade.state === TradeState.DISPUTED;
+  const isDisputeResolved =
+    trade.disputed &&
+    (trade.state === TradeState.COMPLETED || trade.state === TradeState.REFUNDED);
+
+  if (trade.disputed || isDisputeActive) {
+    const detail = initiatorSet
+      ? `Initiated by ${initiatorLabel}`
+      : "Awaiting LLM resolution";
     steps.push({
       title: "Dispute opened",
-      detail: "Awaiting LLM resolution",
+      detail,
       reached: true,
       icon: warningIcon,
     });
   }
-  
-  if (trade.disputed && (trade.state === TradeState.COMPLETED || trade.state === TradeState.REFUNDED)) {
+
+  if (isDisputeResolved) {
     const winnerText = trade.llm_verdict_buyer_wins ? "buyer" : "seller";
+    const resolvedByDefault = Boolean(trade.resolved_by_default);
+    const title = resolvedByDefault
+      ? `Dispute won by default (${winnerText} won)`
+      : `Dispute resolved by LLM (${winnerText} won)`;
+    const detail = resolvedByDefault
+      ? "Other party did not respond within the window"
+      : trade.llm_verdict_reasoning || undefined;
     steps.push({
-      title: `Dispute resolved by LLM (${winnerText} won)`,
-      detail: trade.llm_verdict_reasoning || undefined,
+      title,
+      detail,
       reached: true,
       icon: filledIcon,
     });
