@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-CONTRACT_VERSION = u16(901)
+CONTRACT_VERSION = u16(902)
 
 UPGRADE_TIMELOCK_SECONDS = u64(300)
 
