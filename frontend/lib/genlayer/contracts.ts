@@ -31,7 +31,7 @@ export const ADDRESSES: Record<NetworkKey, NetworkAddresses | null> = {
       "0x10717D9814Ace2098862299C26806a2899eAB204" as Address,
   },
   testnetBradburyDemo: {
-    marketplace: "0x62A9bfD193049Ed19271256d77808519633B8CdD" as Address,
+    marketplace: "0xB84B0683618898769EaCdca7062f9439510878CE" as Address,
     predictionMarket:
       "0x19A008165570Af40eFc0e1CE2AA95CfBC10335F3" as Address,
   },
