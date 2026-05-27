@@ -22,6 +22,11 @@ export interface TradeDetail {
   disputed: boolean;
   llm_verdict_buyer_wins: boolean;
   llm_verdict_reasoning: string;
+  resolved_by_default: boolean;
+  tracking_number: string;
+  tracking_carrier: string;
+  buyer_evidence: string;
+  seller_evidence: string;
 }
 
 export function useTrade(tradeId: number) {
@@ -50,6 +55,11 @@ export function useTrade(tradeId: number) {
         disputed: Boolean(summary.disputed),
         llm_verdict_buyer_wins: Boolean(summary.llm_verdict_buyer_wins),
         llm_verdict_reasoning: String(summary.llm_verdict_reasoning ?? ""),
+        resolved_by_default: Boolean(summary.resolved_by_default),
+        tracking_number: String(listing.tracking_number ?? ""),
+        tracking_carrier: String(listing.tracking_carrier ?? ""),
+        buyer_evidence: String(listing.buyer_evidence ?? ""),
+        seller_evidence: String(listing.seller_evidence ?? ""),
       };
     },
     staleTime: 30_000,

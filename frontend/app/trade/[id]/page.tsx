@@ -9,6 +9,7 @@ import StateBadge from "@/components/marketplace/StateBadge";
 import TradeTimeline from "@/components/marketplace/TradeTimeline";
 import TradeActionsPanel from "@/components/marketplace/TradeActionsPanel";
 import TradePartiesCard from "@/components/marketplace/TradePartiesCard";
+import DisputePanel from "@/components/marketplace/DisputePanel";
 
 export default function TradeDetailPage() {
   const params = useParams();
@@ -44,8 +45,6 @@ function TradeDetailContent({ tradeId }: { tradeId: number }) {
     return <NotFoundView />;
   }
   
-  const isDisputeRelated = trade.disputed;
-  
   return (
     <main className="pt-24 pb-16 px-6 md:px-12 max-w-6xl mx-auto">
       <Link 
@@ -79,19 +78,7 @@ function TradeDetailContent({ tradeId }: { tradeId: number }) {
           
           <TradePartiesCard seller={trade.seller} buyer={trade.buyer} />
           
-          {isDisputeRelated && trade.llm_verdict_reasoning && (
-            <div className="p-6 rounded-xl bg-[var(--warning)]/5 border border-[var(--warning)]/20">
-              <div className="text-xs uppercase tracking-wider text-[var(--warning)] mb-2">
-                LLM Verdict
-              </div>
-              <div className="text-sm text-[var(--text-primary)] mb-3">
-                Winner: <strong>{trade.llm_verdict_buyer_wins ? "Buyer" : "Seller"}</strong>
-              </div>
-              <p className="text-sm text-[var(--text-secondary)]">
-                {trade.llm_verdict_reasoning}
-              </p>
-            </div>
-          )}
+          <DisputePanel trade={trade} />
         </div>
         
         {/* Right column: status + timeline */}
